@@ -25,13 +25,16 @@ class ALK_Clusters:
     gibbs: float = 237.24e3  # Gibbs Energy of global reaction (J/mol)
     def __init__(self,cluster_size_mw,plant_life):
         self.dt = 3600 #sec/timestep
-        
+        include_degradation_penalty = []
+        eol_eff_percent_loss = 10
+        uptime_hours_until_eol = 77600
 
         # OPERATIONAL CONSTRIANTS
         cell_max_current_density = 0.3 #[A/cm^2]
-        ramp_rate = []
-        turndown_ratio = 0.25
-        warm_up_delay = []
+        ramp_rate = [] #percent of rated power per unit time
+        
+        turndown_ratio = 0.25 
+        warm_up_delay = [] #sec to warm up
 
         # OPERATING CONDITIONS
         self.pressure_operating = 1 # [bar] operating pressure
@@ -49,10 +52,10 @@ class ALK_Clusters:
         self.e_m = 0.05 #membrane thickness - check if used
 
         self.w_koh = 30 # [wt. %] can range from [25-33]
-        self.electrolyte_concentration_percent = self.w_koh / 100
+        # self.electrolyte_concentration_percent = self.w_koh / 100
         
 
-        # DEGRADATION RATES
+        # CELL DEGRADATION RATES
         self.onoff_deg_rate =  3.0726072607260716e-04 #[V/off-cycle]
         self.rate_fatigue = 1.2820512820512823e-05 #multiply by rf_track
         self.steady_deg_rate = 5.092592592592592e-09 #V/sec
@@ -71,12 +74,22 @@ class ALK_Clusters:
         pass
     def run_cluster_hydrogen_demand(self):
         pass
+    def run_cluster(self,I_stack):
+        pass
 # ------------------------------------- #      
 # ----- CLUSTER - LEVEL EQUATIONS ----- #
 # ------------------------------------- #     
-    def calc_cluster_status(self):
+
+    def calc_cluster_status(self,I_stack):
         pass
-    def external_power_supply(self):
+    def cluster_calc_curtailed_power(self,input_power_kW):
+        power_curtailed_kW = np.where(input_power_kW > self.cluster_rating_kW,\
+        input_power_kW - self.cluster_rating_kW,0)
+
+        input_power_kW = np.where(input_power_kW >
+                        (self.cluster_rating_kW),
+                        (self.cluster_rating_kW),
+                        input_power_kW)
         pass
 # ----------------------------------- #
 # ----- STACK - LEVEL EQUATIONS ----- #
@@ -84,8 +97,22 @@ class ALK_Clusters:
     def run_stack(self):
         pass
     def create_power_current_curve(self):
+        #NOTE: should this be moved to higher level (like AlkalineSupervisor?)
         pass
     def stack_degraded_current(self,I_stack,V_init,V_deg):
+        """1 liner desc
+
+        longer desc:cite:`jvm-jensen1983note`
+
+        Args:
+            I_stack (_type_): _description_
+            V_init (_type_): _description_
+            V_deg (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        
+        """
         #current decrease - same power
         # I_in = calc_current((power_input_kW,self.T_C), *self.curve_coeff)
         eff_mult = (V_init + V_deg)/V_init #(1 + eff drop)
@@ -99,17 +126,18 @@ class ALK_Clusters:
 # ----- CELL - LEVEL EQUATIONS ----- #
 # ---------------------------------- #
     def create_electrolyte(self,):
+        electrolyte_concentration_percent = self.w_koh / 100
         solution_weight_g = 1000
         density_of_water = 1  # [g/mL] #TODO: could be temperature dependent
         density_of_KOH = 2.12  # [g/mL] #TODO: could be temperature dependent
 
         self.M_KOH = self.M_O + self.M_H + self.M_K  # [g/mol]
-        grams_of_solute = solution_weight_g * (self.electrolyte_concentration_percent)
+        grams_of_solute = solution_weight_g * (electrolyte_concentration_percent)
         moles_of_solute = grams_of_solute / self.M_KOH  # [mols of solute / solution]
         # solvent is water
         self.M_H2O = 2 * self.M_H + self.M_O  # [g/mol]
         grams_of_solvent = solution_weight_g * (
-            1 - self.electrolyte_concentration_percent
+            1 - electrolyte_concentration_percent
         )
         kg_of_solvent = (1 / 1000) * grams_of_solvent
 
@@ -128,8 +156,17 @@ class ALK_Clusters:
 
         return molality,molarity
     
-
+    
     def cell_bubble_rate_coverage(self, T_stack, I_stack):
+        """_summary_
+
+        Args:
+            T_stack (_type_): _description_
+            I_stack (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         T_k = convert_temperature([T_stack], "C", "K")[0]
         T_amb = convert_temperature([25], "C", "K")[0]
         J_lim = 30  # [A/cm^2] [Vogt,Balzer 2005]
@@ -146,6 +183,15 @@ class ALK_Clusters:
         return theta, epsilon
 
     def calc_current_density(self, T_stack, I_stack):
+        """_summary_
+
+        Args:
+            T_stack (_type_): _description_
+            I_stack (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         theta,epsilon = self.cell_bubble_rate_coverage(T_stack, I_stack)
         A_electrode_eff = self.cell_area * (1 - theta)  # [cm^2]
         j = I_stack / A_electrode_eff  # [A/cm^2]
@@ -154,6 +200,7 @@ class ALK_Clusters:
     # ----- CELL VOLTAGE EQUATIONS ----- #
     # ---------------------------------- #
     def cell_design(self,T_stack,I_stack):
+       
         V_rev = self.cell_reversible_overpotential(T_stack, self.pressure_operating)
         V_act_a, V_act_c = self.cell_activation_overpotential(T_stack, I_stack)
         V_ohm = self.cell_ohmic_overpotential(T_stack, I_stack)
@@ -284,7 +331,17 @@ class ALK_Clusters:
             10000 * self.cell_area
         )  # Equation 36 - Ohms
         return Rmem
+
     def cell_electrode_resistance(self,T_stack):
+        """_summary_
+
+        Args:
+            T_stack (_type_): _description_
+
+        Returns:
+            Ra (_type_): _description_
+            Rc (_type_): _description_
+        """
         tref = 25
         temp_coeff = 0.00586  # 1/degC
         # resistivity of 100% dense electrode at tref
@@ -304,41 +361,61 @@ class ALK_Clusters:
             * (1 + (temp_coeff * (T_stack - tref)))
         )
 
-
-        return Ra, Rc  # Ohms
+        return Ra, Rc  
     
     # -------------------------------------- #
     # ----- CELL DEGRADATION EQUATIONS ----- #
     # -------------------------------------- #
     def cell_degradation(self):
-        pass
+        V_cell = V_cell*cluster_status
+        
+        V_deg_uptime = self.cell_steady_degradation(V_cell)
+        V_deg_onoff = self.cell_onoff_degradation()
+        V_fatigue = self.cell_fatigue_degradation()
+
+        V_deg = np.cumsum(V_deg_uptime) + np.cumsum(V_deg_onoff) + V_fatigue
+        return V_deg
+
     def cell_fatigue_degradation(self):
         self.rate_fatigue
         pass
+
     def cell_steady_degradation(self):
-        self.steady_deg_rate
-        pass
+        steady_deg_per_hr=self.dt*self.steady_deg_rate*V_cell*cluster_status
+        # cumulative_Vdeg=np.cumsum(steady_deg_per_hr)
+        # self.steady_deg_rate
+        return steady_deg_per_hr
+
     def cell_onoff_degradation(self):
-        self.onoff_deg_rate
-        pass
+        change_stack=np.diff(cluster_status)
+        cycle_cnt = np.where(change_stack < 0, -1*change_stack, 0)
+        cycle_cnt = np.array([0] + list(cycle_cnt))
+        self.off_cycle_cnt = cycle_cnt
+        stack_off_deg_per_hr= self.onoff_deg_rate*cycle_cnt
+        return stack_off_deg_per_hr
     
     
     # --------------------------------- #
     # ----- CELL OUTPUT EQUATIONS ----- #
     # --------------------------------- #
     def calc_faradaic_efficiency(self,T_stack,I_stack):
-        j = self.calc_current_density(T_stack, I_stack)  # [A/cm^2]
-        j *= 1000  # [mA/cm^2]
+
         f1 = 250  # [mA^2/cm^4]
         f2 = 0.96  # [-]
+
+        j = self.calc_current_density(T_stack, I_stack)  # [A/cm^2]
+        j *= 1000  # [mA/cm^2]
+        #Faradaic Efficiency
         eta_F = f2 * (j**2) / (f1 + j**2)
         return eta_F
+
     def cell_H2_production_rate(self,T_stack,I_stack):
         eta_F = self.calc_faradaic_efficiency(T_stack, I_stack)
         h2_prod_mol = eta_F * I_stack / (2 * self.F) #[mol/sec]
         mfr = self.M_H2 * h2_prod_mol  # [g/sec]
         mfr_H2 = self.dt*mfr / 1e3  # [kg/cell-dt]
         return mfr_H2
+
     def cell_O2_production_rate(self,T_stack,I_stack):
         eta_F = self.calc_faradaic_efficiency(T_stack, I_stack)
         o2_prod_mol = eta_F * I_stack / (4 * self.F) #[mol/sec]
