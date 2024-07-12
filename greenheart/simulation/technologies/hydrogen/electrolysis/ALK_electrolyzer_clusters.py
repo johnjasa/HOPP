@@ -8,6 +8,12 @@ import rainflow
 from scipy import interpolate
 from scipy.constants import R, physical_constants, convert_temperature
 
+def stack_power_to_current(P_T,p1,p2,p3,p4,p5,p6): #calculates i-v curve coefficients given the stack power and stack temp
+    pwr,tempc=P_T
+    # i_stack=p1*(pwr**2) + p2*(tempc**2)+ (p3*pwr*tempc) +  (p4*pwr) + (p5*tempc) + (p6)
+    i_stack=p1*(pwr**3) + p2*(pwr**2) +  (p3*pwr) + (p4*pwr**(1/2)) + p5
+    return i_stack 
+
 class ALK_Clusters:
     # num hydrogen molecules transferred per reaction
     z: int = 2 #TODO: change to z_c
@@ -23,33 +29,39 @@ class ALK_Clusters:
     lhv: float = 33.33  # lower heating value of H2 [kWh/kg]
     hhv: float = 39.41  # higher heating value of H2 [kWh/kg]
     gibbs: float = 237.24e3  # Gibbs Energy of global reaction (J/mol)
-    def __init__(self,cluster_size_mw,plant_life):
+    def __init__(self,cluster_size_mw,plant_life,include_degradation_penalty = True,run_LTA = True,debug_mode = False):
         self.dt = 3600 #sec/timestep
-        include_degradation_penalty = []
+        include_degradation_penalty = True
         eol_eff_percent_loss = 10
         uptime_hours_until_eol = 77600
-
-        # OPERATIONAL CONSTRIANTS
-        cell_max_current_density = 0.3 #[A/cm^2]
-        ramp_rate = [] #percent of rated power per unit time
         
-        turndown_ratio = 0.25 
-        warm_up_delay = [] #sec to warm up
+        # OPERATIONAL CONSTRIANTS
+        # cell_nominal_current_density = 0.3 #[A/cm^2]
+        self.nominal_current_density = 0.4 #[A/cm^2]
+        self.ramp_rate_percent = 0.2 #percent of rated current per second
+        
+        self.turndown_ratio = 0.25 
+        self.cold_start_delay = 1800 #sec to warm up from cold
 
         # OPERATING CONDITIONS
-        self.pressure_operating = 1 # [bar] operating pressure
-        T_stack = 60 #check value
+        self.pressure_operating = 1 #1 # [bar] operating pressure
+        T_stack = 60 #Celsius
 
         # CLUSTER DESIGN PARAMETERS
-        self.n_stacks = []
+        #ASSUMES THAT STACK IS 1 MW THEREFORE n_stacks = cluster_size_mw
+        self.n_stacks = cluster_size_mw
+        
+        # self.cluster_rating_kW
+        
         # STACK DESIGN PARAMETERS
-        self.stack_rating_kW = 1000  # 1 MW
-        self.n_cells = []
+        self.stack_rating_kW = 1000  # 1 MW - this is reset in system_design
+        self.n_cells = 882
 
         # CELL DESIGN PARAMETERS
-        self.cell_area = 300 # [cm^2] membrane and electrode area
+        self.cell_area = 1500 #300 # [cm^2] membrane and electrode area
         self.d_em = 0.125 # [cm] electrode-membrane distance
         self.e_m = 0.05 #membrane thickness - check if used
+        self.e_e = 0.2 #electrode thickness [cm]
 
         self.w_koh = 30 # [wt. %] can range from [25-33]
         # self.electrolyte_concentration_percent = self.w_koh / 100
@@ -61,44 +73,282 @@ class ALK_Clusters:
         self.steady_deg_rate = 5.092592592592592e-09 #V/sec
 
         # INITIALIZATION
+        self.initalize_outputs(plant_life,run_LTA,debug_mode)
         self.m,self.M = self.create_electrolyte()
-        self.curve_coeff=self.create_power_current_curve()
+        self.system_design(T_stack)
+        self.curve_coeff=self.create_power_current_curve(T_stack)
+
+        self.eol_eff_drop = eol_eff_percent_loss/100
+        self.d_eol=self.find_eol_voltage_val(eol_eff_percent_loss)
+
+    def design_stack(self,T_stack,tol_kW = 1):
+        self.system_design(T_stack)
+        inital_error_kW = abs(self.stack_rating_kW - self.stack_rating_kW)
+        if inital_error_kW>tol_kW:
+            cell_power_W = self.nominal_current*self.V_cell_nominal
+
+    def system_design(self,T_stack):
+        self.T_stack = T_stack
+        self.min_current_density = self.turndown_ratio*self.nominal_current_density
+        
+        self.min_current = self.min_current_density*self.cell_area
+        self.nominal_current = self.nominal_current_density*self.cell_area
+
+        # j_rated_actual = self.calc_current_density(T_stack, self.nominal_current)
+        # j_min_actual = self.calc_current_density(T_stack, self.min_current)
+        
+        # self.rated_current_actual = j_rated_actual*self.cell_area
+        # self.min_current_actual = j_min_actual*self.cell_area
+
+        V_cell_min = self.cell_design(T_stack,self.min_current)
+        V_cell_nominal = self.cell_design(T_stack,self.nominal_current)
+        self.V_cell_nominal=V_cell_nominal
+        self.V_cell_min = V_cell_min
+
+        self.cell_rating_kW = self.nominal_current*V_cell_nominal/1e3
+        self.stack_rating_kW = self.cell_rating_kW*self.n_cells
+        self.cluster_rating_kW = self.stack_rating_kW*self.n_stacks
+        
+        self.min_cell_power_kW = self.min_current*V_cell_min/1e3
+        self.min_stack_power_kW = self.min_cell_power_kW*self.n_cells
+        self.min_cluster_power_kW = self.min_stack_power_kW*self.n_stacks
+
+        cell_nominal_h2_kg = self.cell_H2_production_rate(T_stack,self.nominal_current)
+        stack_nominal_h2_kg = cell_nominal_h2_kg*self.n_cells #[kg H2/dt-stack]
+        self.cluster_nominal_h2_kg = stack_nominal_h2_kg*self.n_stacks #[kg H2/dt-cluster]
+
+        cell_min_h2_kg = self.cell_H2_production_rate(T_stack,self.min_current)
+        stack_min_h2_kg = cell_min_h2_kg*self.n_cells #[kg H2/dt-stack]
+        self.cluster_min_h2_kg = stack_min_h2_kg*self.n_stacks #[kg H2/dt-cluster]
+
+        self.current_ramp_rate = self.ramp_rate_percent*self.nominal_current*self.dt #A/dt
+
+        #TODO: add these values to BOL design info outputs
+        self.BOL_design_info
+        []
 # -------------------------------------------- #      
 # ----- OPERATIONAL CONSTRAINTS & LOSSES ----- #
-# -------------------------------------------- #     
-    def cluster_warm_up_losses(self):
+# -------------------------------------------- #    
+    def initalize_outputs(self,plant_life:int,run_LTA:bool,debug_mode:bool):
+        
+        timeseries_keys = ["Hydrogen Production [kg]","Power Usage [kW]","Hydrogen Losses [kg]","Power Curtailed [kW]"]
+        if run_LTA:
+            years = np.arange(0,plant_life,1)
+            years = [int(y) for y in years]
+            
+            lta_keys = ['Capacity Factor [-]','Refurbishment Schedule [stacks replaced/year]','Annual H2 Production [kg/year]']
+            lta_keys += ['Annual Average Efficiency [kWh/kg]','Annual Average Efficiency [%-HHV]','Annual Energy Used [kWh/year]']
+            x = [[None]*len(lta_keys) for _ in range(plant_life)]
+            self.LTA_results_average = pd.DataFrame(data=x,index=years,columns=lta_keys)
+            self.LTA_results_annual = dict(zip(lta_keys,[None]*len(lta_keys)))
+
+            timeseries_keys += ["I_stack_nom","V_cell","V_deg"]
+        if debug_mode:
+            timeseries_keys += ["I_stack_deg","Actual Power Input [kW]","Cluster Status"]
+        
+        self.simulation_results = {}
+        self.BOL_design_info = {}
+        self.timeseries_results = dict(zip(timeseries_keys,[None]*len(timeseries_keys)))
+    def find_eol_voltage_val(self,eol_eff_percent_loss):
+        #HASN'T BEEN VERIFIED
+        bol_eff_kWh_per_kg = self.cluster_rating_kW/self.cluster_nominal_h2_kg
+        self.nominal_current
+        V_cell_nominal = self.cell_design(self.T_stack,self.nominal_current)
+        eol_eff_kWh_per_kg = bol_eff_kWh_per_kg*(1+eol_eff_percent_loss/100)
+        eol_power_consumed_kWh = eol_eff_kWh_per_kg*self.cluster_nominal_h2_kg
+        v_tot_eol=eol_power_consumed_kWh*1000/(self.n_cells*self.nominal_current)
+        d_eol = v_tot_eol - V_cell_nominal
+        return d_eol
+    def cluster_external_power_supply(self,input_external_power_kW):
+        total_curtailed_power_kW = self.cluster_calc_curtailed_power(input_external_power_kW)
+        power_to_electrolyzer_kW = input_external_power_kW - total_curtailed_power_kW
+        return power_to_electrolyzer_kW
+
+    def cluster_warm_up_losses(self,cluster_status):
+        warm_up_ratio = 1 - (self.cold_start_delay/self.dt)
+        #no delay at beginning of sim
+        # if cluster_status[0]==0: #off at start of sim
+        cluster_cycling = [0] + list(np.diff(cluster_status)) 
+        # else:
+        #     cluster_cycling = [0] + list(np.diff(cluster_status)) 
+        cluster_cycling = np.array(cluster_cycling)
+        h2_multiplier = np.where(cluster_cycling > 0, warm_up_ratio, 1)
+        return h2_multiplier
+    
+    def add_simulation_results(self,key,value,timeseries_result:bool):
+        if timeseries_result:
+            if key in self.timeseries_results.keys():
+                self.timeseries_results[key]= value
+            else:
+                self.simulation_results.update({"--Total {}".format(key):sum(value)})
+        else:
+            self.simulation_results.update({key:value})
+        
+    def run_cluster_variable_power(self,input_external_power_kW):
+        #0a. calculate curtailed power
+        total_curtailed_power_kW = self.cluster_calc_curtailed_power(input_external_power_kW)
+        self.add_simulation_results("Total Curtailed Power [kW/sim]",np.sum(total_curtailed_power_kW),False)
+        self.add_simulation_results("Power Curtailed [kW]",total_curtailed_power_kW,True)
+        
+        #0b. check cluster power input within load bounds
+        input_external_power_kW = self.cluster_external_power_supply(input_external_power_kW)
+        self.add_simulation_results("Actual Power Input [kW]",input_external_power_kW,True)
+        #1. convert power to nominal (undegraded) current
+        power_per_stack_kW = input_external_power_kW/self.n_stacks
+        I_stack_nom = stack_power_to_current((power_per_stack_kW,self.T_stack),*self.curve_coeff)
+        #2a. ensure ramp rate is within limits
+        I_stack_nom = self.check_ramp_rate(I_stack_nom)
+        self.add_simulation_results("I_stack_nom",I_stack_nom,True)
+        #2b. calculate cluster on/off status (0: off, 1: on)
+        cluster_status = self.calc_cluster_status(I_stack_nom)
+        self.add_simulation_results("Cluster Status",cluster_status,True)
+        #2c. calculate hydrogen warm-up loss multipler
+        h2_multiplier = self.cluster_warm_up_losses(cluster_status)
+        #3. calculate un-degraded cell voltage based on nominal current
+        V_cell_nom = self.cell_design(self.T_stack,I_stack_nom)
+        self.add_simulation_results("V_cell",V_cell_nom,True)
+        #4. calculate cell degradation degradation
+        V_deg = self.cell_degradation(V_cell_nom,cluster_status)
+        self.add_simulation_results("V_deg",V_deg,True)
+        #5. calculate degraded current
+        I_stack = self.stack_degraded_current(I_stack_nom,V_cell_nom,V_deg)
+        self.add_simulation_results("I_stack_deg",I_stack,True)
+        #6. calculate nominal hydrogen production
+        hydrogen_produced_kg_nom = self.cell_H2_production_rate(self.T_stack,I_stack)*self.n_cells*self.n_stacks
+        #7. apply hydrogen losses to hydrogen production
+        hydrogen_produced_kg = hydrogen_produced_kg_nom*h2_multiplier
+        self.add_simulation_results("Total Hydrogen Production [kg/sim]",np.sum(hydrogen_produced_kg),False)
+        self.add_simulation_results("Hydrogen Production [kg]",hydrogen_produced_kg,True)
+        #8. calculate actual power consumption
+        power_consumed_kW = (I_stack*(V_cell_nom+V_deg)*self.n_cells*self.n_stacks)/1e3
+        self.add_simulation_results("Total Power Usage [kW/sim]",np.sum(power_consumed_kW),False)
+        self.add_simulation_results("Power Usage [kW]",power_consumed_kW,True)
+        #9 calculate hydrogen losses
+        hydrogen_losses_kg = hydrogen_produced_kg_nom-hydrogen_produced_kg
+        self.add_simulation_results("Total Hydrogen Losses [kg/sim]",np.sum(hydrogen_losses_kg),False)
+        self.add_simulation_results("Hydrogen Losses [kg]",hydrogen_losses_kg,True)
+        
+    def run_cluster_hydrogen_demand(self,H2_required_cluster_kg):
+        I_stack,input_external_power_kW = self.calc_current_power_required_for_hydrogen_demand(H2_required_cluster_kg)
+        #0b. check cluster power input within load bounds
+        input_external_power_kW = self.cluster_external_power_supply(input_external_power_kW)
+        self.add_simulation_results("Actual Power Input [kW]",input_external_power_kW,True)
+        #2a. ensure ramp rate is within limits
+        I_stack_nom = self.check_ramp_rate(I_stack)
+        self.add_simulation_results("I_stack_nom",I_stack,True)
+        #2b. calculate cluster on/off status (0: off, 1: on)
+        cluster_status = self.calc_cluster_status(I_stack_nom)
+        self.add_simulation_results("Cluster Status",cluster_status,True)
+        #2c. calculate hydrogen warm-up loss multipler
+        h2_multiplier = self.cluster_warm_up_losses(cluster_status)
+        #3. calculate un-degraded cell voltage based on nominal current
+        V_cell_nom = self.cell_design(self.T_stack,I_stack_nom)
+        self.add_simulation_results("V_cell",V_cell_nom,True)
+        #4. calculate cell degradation degradation
+        V_deg = self.cell_degradation(V_cell_nom,cluster_status)
+        self.add_simulation_results("V_deg",V_deg,True)
+        #5. calculate degraded current
+        #6. calculate nominal hydrogen production
+        hydrogen_produced_kg_nom = self.cell_H2_production_rate(self.T_stack,I_stack)*self.n_cells*self.n_stacks
+        #7. apply hydrogen losses to hydrogen production
+        hydrogen_produced_kg = hydrogen_produced_kg_nom*h2_multiplier
+        self.add_simulation_results("Total Hydrogen Production [kg/sim]",np.sum(hydrogen_produced_kg),False)
+        self.add_simulation_results("Hydrogen Production [kg]",hydrogen_produced_kg,True)
+        #8. calculate actual power consumption
+        power_consumed_kW = (I_stack*(V_cell_nom+V_deg)*self.n_cells*self.n_stacks)/1e3
+        self.add_simulation_results("Total Power Usage [kW/sim]",np.sum(power_consumed_kW),False)
+        self.add_simulation_results("Power Usage [kW]",power_consumed_kW,True)
+        #9 calculate hydrogen losses
+        hydrogen_losses_kg = hydrogen_produced_kg_nom-hydrogen_produced_kg
+        self.add_simulation_results("Total Hydrogen Losses [kg/sim]",np.sum(hydrogen_losses_kg),False)
+        self.add_simulation_results("Hydrogen Losses [kg]",hydrogen_losses_kg,True)
+
+
+    def calc_current_power_required_for_hydrogen_demand(self,H2_required_cluster_kg):
+        H2_required_per_stack_kg = H2_required_cluster_kg/self.n_stacks
+        I_reqd = self.stack_reverse_faradays(H2_required_per_stack_kg)
+        V_reqd = self.cell_design(self.T_stack,I_reqd)
+        V_deg_est = self.estimate_cell_degradation_from_demand(H2_required_cluster_kg)
+        power_reqd_kW = (I_reqd*(V_reqd,V_deg_est)*self.n_cells*self.n_stacks)/1e3
+        return I_reqd,power_reqd_kW
+        
+    def run(self,input_external_power_kW,H2_required_cluster_kg):
         pass
-    def check_ramp_rate(self):
-        pass
-    def run_cluster_variable_power(self):
-        pass
-    def run_cluster_hydrogen_demand(self):
-        pass
-    def run_cluster(self,I_stack):
-        pass
+    # def run_cluster(self,I_stack):
+    #     #TODO: make T_stack an attribute
+    #     self.cell_H2_production_rate(self.T_stack,I_stack)*self.n_cells
+    #     pass
+    def check_ramp_rate(self,I_stack):
+        
+        if self.current_ramp_rate>self.nominal_current:
+            return I_stack
+        else:
+            dI = np.abs(np.diff(I_stack))
+            if np.max(dI)>self.current_ramp_rate:
+                i_stack_n = I_stack[0]
+                for i in range(1,len(I_stack)):
+                    di = I_stack[i]-i_stack_n
+                    if di>self.current_ramp_rate:
+                        I_stack[i] = i_stack_n + di
+                    i_stack_n = I_stack[i]
+
+            return I_stack
 # ------------------------------------- #      
 # ----- CLUSTER - LEVEL EQUATIONS ----- #
 # ------------------------------------- #     
 
     def calc_cluster_status(self,I_stack):
-        pass
-    def cluster_calc_curtailed_power(self,input_power_kW):
-        power_curtailed_kW = np.where(input_power_kW > self.cluster_rating_kW,\
-        input_power_kW - self.cluster_rating_kW,0)
+        #NOTE: should on/off be determined by current or current density or power?
+        cluster_status=np.where(I_stack<self.min_current,0,1)
 
-        input_power_kW = np.where(input_power_kW >
-                        (self.cluster_rating_kW),
-                        (self.cluster_rating_kW),
-                        input_power_kW)
-        pass
+        return cluster_status
+    def cluster_calc_curtailed_power(self,input_external_power_kW):
+        excess_power_curtailed_kW = np.where(input_external_power_kW > self.cluster_rating_kW,\
+        input_external_power_kW - self.cluster_rating_kW,0)
+
+        minimum_power_kW = self.turndown_ratio*self.cluster_rating_kW
+        below_turndown_power_curtailed_kW = np.where(input_external_power_kW<minimum_power_kW,minimum_power_kW,0)
+        total_curtailed_power_kW = below_turndown_power_curtailed_kW + excess_power_curtailed_kW
+        return total_curtailed_power_kW
 # ----------------------------------- #
 # ----- STACK - LEVEL EQUATIONS ----- #
 # ----------------------------------- #
-    def run_stack(self):
+    def run_stack(self,T_stack,I_stack):
+        cluster_status = self.calc_cluster_status(I_stack)
+        stack_h2_production_rate = self.cell_H2_production_rate(T_stack,I_stack)*self.n_cells
         pass
-    def create_power_current_curve(self):
+    def create_power_current_curve(self,T_stack):
         #NOTE: should this be moved to higher level (like AlkalineSupervisor?)
-        pass
+        #TODO: add in curve error
+        
+        dA = 10
+        dT = 5
+        current_range = np.arange(self.min_current,self.nominal_current+dA,dA) 
+        temp_range = np.arange(T_stack-dT,T_stack+dT,dT)
+        # np.piecewise(x, [x < 0, x >= 0], [-1, 1])
+        powers = np.zeros(len(current_range)*len(temp_range))
+        currents = np.zeros(len(current_range)*len(temp_range))
+        temps_C = np.zeros(len(current_range)*len(temp_range))
+        cell_voltage = np.zeros(len(current_range)*len(temp_range))
+        current_density = np.zeros(len(current_range)*len(temp_range))
+        idx = 0
+        for i in range(len(current_range)):
+            
+            for t in range(len(temp_range)):
+                current_density[idx] = self.calc_current_density(temp_range[t],current_range[i])
+                cell_voltage[idx] = self.cell_design(temp_range[t],current_range[i])
+                powers[idx] = current_range[i]*self.cell_design(temp_range[t],current_range[i])*self.n_cells*(1e-3) #stack power
+                currents[idx] = current_range[i]
+                temps_C[idx] = temp_range[t]
+                idx = idx+1
+        df=pd.DataFrame({'Power':powers,'Current':currents,'Temp':temps_C}) #added
+        temp_oi_idx = df.index[df['Temp']==T_stack]   
+        curve_coeff, curve_cov = scipy.optimize.curve_fit(stack_power_to_current, (df['Power'][temp_oi_idx].values,df['Temp'][temp_oi_idx].values), df['Current'][temp_oi_idx].values, p0=(1.0,1.0,1.0,1.0,1.0,1.0))
+
+        df_dbg=pd.DataFrame({'T [C]':temps_C,'I [A]':currents,'V_cell':cell_voltage,"J [A/cm^2]":current_density,'Power [kW/cell]':powers}) #added
+        df_dbg2 = df_dbg[df_dbg["T [C]"]==T_stack]
+
+        return curve_coeff
     def stack_degraded_current(self,I_stack,V_init,V_deg):
         """1 liner desc
 
@@ -119,13 +369,14 @@ class ALK_Clusters:
         I_deg = I_stack/eff_mult
 
         return I_deg
-    def stack_degraded_power(self,h2_demand_kg,V_init,V_deg):
+    def stack_degraded_power(self,I_nom,V_init,V_deg):
         #power increase - same current
-        pass
+        P_deg_kW = I_nom*(V_init+V_deg)*self.n_cells/1e3
+        return P_deg_kW
 # ---------------------------------- #
 # ----- CELL - LEVEL EQUATIONS ----- #
 # ---------------------------------- #
-    def create_electrolyte(self,):
+    def create_electrolyte(self):
         electrolyte_concentration_percent = self.w_koh / 100
         solution_weight_g = 1000
         density_of_water = 1  # [g/mL] #TODO: could be temperature dependent
@@ -249,7 +500,12 @@ class ALK_Clusters:
 
     def cell_Urev0(self):
         return self.gibbs / (2 * self.F)
-
+    def cell_Utn(self):
+        #change in enthalpy (H) over zF
+        #h = 285.83 kJ/mol
+        enthalpy = 286e3 #kJ/mol
+        Utn = enthalpy/(self.z*self.F)
+        return Utn
     def cell_activation_overpotential(self, T_stack, I_stack):
         # validated against Figure 5 of Reference
         j_eff = self.calc_current_density(T_stack, I_stack)
@@ -352,12 +608,12 @@ class ALK_Clusters:
         rho_nickle_eff = rho_nickle_0 / ((1 - epsilon_Ni) ** 1.5)
         Ra = (
             rho_nickle_eff
-            * (self.e_a / self.cell_area)
+            * (self.e_e / self.cell_area)
             * (1 + (temp_coeff * (T_stack - tref)))
         )
         Rc = (
             rho_nickle_eff
-            * (self.e_c / self.cell_area)
+            * (self.e_e / self.cell_area)
             * (1 + (temp_coeff * (T_stack - tref)))
         )
 
@@ -366,29 +622,51 @@ class ALK_Clusters:
     # -------------------------------------- #
     # ----- CELL DEGRADATION EQUATIONS ----- #
     # -------------------------------------- #
-    def cell_degradation(self):
+    def cell_degradation(self,V_cell,cluster_status):
         V_cell = V_cell*cluster_status
         
         V_deg_uptime = self.cell_steady_degradation(V_cell)
-        V_deg_onoff = self.cell_onoff_degradation()
+        V_deg_onoff = self.cell_onoff_degradation(cluster_status)
         V_fatigue = self.cell_fatigue_degradation()
 
         V_deg = np.cumsum(V_deg_uptime) + np.cumsum(V_deg_onoff) + V_fatigue
         return V_deg
 
-    def cell_fatigue_degradation(self):
-        self.rate_fatigue
-        pass
+    def cell_fatigue_degradation(self,V_cell,dt_fatigue_calc_hrs=168):
+        V_fatigue_ts=np.zeros(len(V_cell))
+        if np.max(V_cell)!=np.min(V_cell):
+            
+            rf_cycles = rainflow.count_cycles(V_cell, nbins=10)
+            rf_sum = np.sum([pair[0] * pair[1] for pair in rf_cycles])
+            lifetime_fatigue_deg=rf_sum*self.rate_fatigue
 
-    def cell_steady_degradation(self):
+            rf_track=0
+            t_calc=np.arange(0,len(V_cell)+dt_fatigue_calc_hrs,dt_fatigue_calc_hrs) 
+            for i in range(len(t_calc)-1):
+                voltage_signal_temp = V_cell[np.nonzero(V_cell[t_calc[i]:t_calc[i+1]])]
+                if np.size(voltage_signal_temp)==0:
+                    rf_sum = 0
+                elif np.max(voltage_signal_temp)==np.min(voltage_signal_temp):
+                    rf_sum=0
+                else:
+                    rf_cycles=rainflow.count_cycles(voltage_signal_temp, nbins=10)
+                    rf_sum = np.sum([pair[0] * pair[1] for pair in rf_cycles])
+                rf_track+=rf_sum
+                V_fatigue_ts[t_calc[i]:t_calc[i+1]]=rf_track*self.rate_fatigue
+
+        
+        return V_fatigue_ts
+
+    def cell_steady_degradation(self,V_cell,cluster_status):
         steady_deg_per_hr=self.dt*self.steady_deg_rate*V_cell*cluster_status
         # cumulative_Vdeg=np.cumsum(steady_deg_per_hr)
         # self.steady_deg_rate
         return steady_deg_per_hr
 
-    def cell_onoff_degradation(self):
+    def cell_onoff_degradation(self,cluster_status):
         change_stack=np.diff(cluster_status)
         cycle_cnt = np.where(change_stack < 0, -1*change_stack, 0)
+        
         cycle_cnt = np.array([0] + list(cycle_cnt))
         self.off_cycle_cnt = cycle_cnt
         stack_off_deg_per_hr= self.onoff_deg_rate*cycle_cnt
@@ -423,6 +701,58 @@ class ALK_Clusters:
         mfr_O2 = self.dt*mfr / 1e3  # [kg/cell-dt]
         return mfr_O2
     
+    def stack_reverse_faradays(self,H2_required_per_stack_kg):
+        I_reqd_BOL_noFaradaicLoss=(H2_required_per_stack_kg*1000*2*self.F)/(1*self.n_cells*self.dt*self.M_H2)
+        n_f=self.calc_faradaic_efficiency(I_reqd_BOL_noFaradaicLoss)
+        I_reqd=(H2_required_per_stack_kg*1000*2*self.F)/(n_f*self.n_cells*self.dt*self.M_H2)
+        return I_reqd
+
+    def estimate_cell_degradation_from_demand(self,H2_required_cluster_kg):
+
+        H2_required_per_stack_kg = H2_required_cluster_kg/self.n_stacks
+        I_reqd = self.stack_reverse_faradays(H2_required_per_stack_kg)
+        V_reqd = self.cell_design(self.T_stack,I_reqd)
+        if isinstance(H2_required_cluster_kg,float):
+            #steady
+            V_deg_per_hr=self.steady_deg_rate*V_reqd*self.dt
+            V_deg=np.arange(0,self.d_eol+V_deg_per_hr,V_deg_per_hr)
+            
+        else:
+            cluster_status = self.calc_cluster_status(I_reqd)
+            V_deg = self.cell_degradation(V_reqd,cluster_status)
+            #TODO: only return V-deg until EOL
+            if np.max(V_deg)>self.d_eol:
+                idx_dead = np.argwhere(V_deg>self.d_eol)[0][0]
+                V_deg = V_deg[0:idx_dead]
+
+        # P_reqd_per_hr_stack=I_reqd*(V_reqd + V_deg)*self.n_cells/1000 #kW
+        # P_required_per_hr_system=self.n_stacks*P_reqd_per_hr_stack #kW
+            
+        return V_deg
+        
     # ------------------------------------ #      
     # ----- ANALYSIS/POST-PROCESSING ----- #
     # ------------------------------------ #     
+if __name__ == "__main__":
+    
+    alk = ALK_Clusters(cluster_size_mw=1,plant_life=30)
+    # from greenheart.simulation.technologies.hydrogen.electrolysis.ALK_electrolyzer_tools import plot_IV_curve
+    # plot_IV_curve(alk,file_desc="7-bar")
+    alk.nominal_current*alk.V_cell_nominal
+    alk.V_cell_nominal #around 1.9
+    alk.nominal_current_density #0.5
+    # A_cell = np.arange(300,2500,100)
+    # J_cell_nom = np.arange(0.25,0.55,0.05)
+    # V_cells = np.zeros(len(J_cell_nom))
+    # n_cells = np.zeros(len(J_cell_nom))
+    # T_stack = 60
+    # for i,j in enumerate(J_cell_nom):
+    #     alk.cell_area = 1500
+    #     alk.pressure_operating = 1
+    #     alk.nominal_current_density = j 
+    #     alk.system_design(T_stack)
+    #     V_cells[i] = alk.V_cell_nominal
+    #     # n_cells = 1000/(alk.nominal_current*alk.V_cell_nominal/1e3)
+    #     n_cells[i] = 1e6/(alk.nominal_current*alk.V_cell_nominal)
+    []
+
