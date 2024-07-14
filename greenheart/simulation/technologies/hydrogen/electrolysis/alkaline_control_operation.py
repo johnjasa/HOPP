@@ -1,4 +1,5 @@
 from greenheart.simulation.technologies.hydrogen.electrolysis.ALK_electrolyzer_clusters import ALK_Clusters as alk
+from greenheart.simulation.technologies.hydrogen.electrolysis.alkaline_LTA import alkaline_LTA
 import numpy as np
 import pandas as pd
 class AlkalineSupervisor:
@@ -14,35 +15,44 @@ class AlkalineSupervisor:
         # clusters = self.create_clusters(num_clusters,cluster_size_MW,alk_kwargs)
 
     def run(self,clusters):
-
-        power_to_clusters = self.even_split_power(input_power_kW,clusters)
-        h2_df_ts = pd.DataFrame()
-        h2_df_tot = pd.DataFrame()
-        col_names = []
         for ci, cluster in enumerate(clusters):
-            cl_name = "Cluster #{}".format(ci)
-            col_names.append(cl_name)
-            h2_ts, h2_tot = clusters[ci].run(power_to_clusters[ci])
-            # h2_dict_ts['Cluster #{}'.format(ci)] = h2_ts
+            clusters[ci].run_cluster_variable_power(power_to_clusters[ci])
+            clusters[ci].run_cluster_hydrogen_demand(H2_required_cluster_kg[ci])
+            clusters[ci].simulation_results
+            clusters[ci].timeseries_results
+            clusters[ci].BOL_design_info
+            if clusters[ci].run_LTA:
+                clusters[ci].LTA_results_annual
 
-            h2_ts_temp = pd.Series(h2_ts, name=cl_name)
-            h2_tot_temp = pd.Series(h2_tot, name=cl_name)
-            if len(h2_df_tot) == 0:
-                h2_df_tot = pd.concat(
-                    [h2_df_tot, h2_tot_temp], axis=0, ignore_index=False
-                )
-                h2_df_tot.columns = col_names
 
-                h2_df_ts = pd.concat([h2_df_ts, h2_ts_temp], axis=0, ignore_index=False)
-                h2_df_ts.columns = col_names
-            else:
-                # h2_df_ts = h2_df_ts.join(h2_ts_temp)
-                h2_df_tot = h2_df_tot.join(h2_tot_temp)
-                h2_df_tot.columns = col_names
+        # power_to_clusters = self.even_split_power(input_power_kW,clusters)
+        # h2_df_ts = pd.DataFrame()
+        # h2_df_tot = pd.DataFrame()
+        # col_names = []
+        # for ci, cluster in enumerate(clusters):
+        #     cl_name = "Cluster #{}".format(ci)
+        #     col_names.append(cl_name)
+        #     h2_ts, h2_tot = clusters[ci].run(power_to_clusters[ci])
+        #     # h2_dict_ts['Cluster #{}'.format(ci)] = h2_ts
 
-                h2_df_ts = h2_df_ts.join(h2_ts_temp)
-                h2_df_ts.columns = col_names
-        pass
+        #     h2_ts_temp = pd.Series(h2_ts, name=cl_name)
+        #     h2_tot_temp = pd.Series(h2_tot, name=cl_name)
+        #     if len(h2_df_tot) == 0:
+        #         h2_df_tot = pd.concat(
+        #             [h2_df_tot, h2_tot_temp], axis=0, ignore_index=False
+        #         )
+        #         h2_df_tot.columns = col_names
+
+        #         h2_df_ts = pd.concat([h2_df_ts, h2_ts_temp], axis=0, ignore_index=False)
+        #         h2_df_ts.columns = col_names
+        #     else:
+        #         # h2_df_ts = h2_df_ts.join(h2_ts_temp)
+        #         h2_df_tot = h2_df_tot.join(h2_tot_temp)
+        #         h2_df_tot.columns = col_names
+
+        #         h2_df_ts = h2_df_ts.join(h2_ts_temp)
+        #         h2_df_ts.columns = col_names
+        # pass
 
     def even_split_power_sequential(self):
         pass

@@ -35,6 +35,7 @@ class ALK_Clusters:
         self.penalize_hydrogen_production = True #TODO: make input
         eol_eff_percent_loss = 10
         uptime_hours_until_eol = 77600
+        self.run_LTA = run_LTA
         
         # OPERATIONAL CONSTRIANTS
         # cell_nominal_current_density = 0.3 #[A/cm^2]
@@ -228,7 +229,47 @@ class ALK_Clusters:
         hydrogen_losses_kg = hydrogen_produced_kg_nom-hydrogen_produced_kg
         self.add_simulation_results("Total Hydrogen Losses [kg/sim]",np.sum(hydrogen_losses_kg),False)
         self.add_simulation_results("Hydrogen Losses [kg]",hydrogen_losses_kg,True)
+        #11. run additional post-processing
+        #calculate_efficiency()
+        #estimate_time_between_replacement()
+        #estimate_stack_life()
+        if self.run_LTA:
+            self.run_LTA_analysis(V_deg,V_cell_nom,I_stack_nom)
+        
         return power_consumed_kW,hydrogen_produced_kg
+
+    def estimate_stack_life(self,V_deg,cluster_status):
+        #based on operation (on-time)
+
+        #[V] degradation at end of simulation
+        d_sim = V_deg[-1] 
+        frac_of_life_used = d_sim/self.d_eol
+        operational_time_dt=np.sum(cluster_status) 
+        #stack life [hrs] based on number of hours operating
+        stack_life = (1/frac_of_life_used)*operational_time_dt #[hrs]
+
+        return stack_life
+    def estimate_time_between_replacement(self,V_deg):
+        #based on existance (simulation time)
+        d_sim = V_deg[-1] 
+        frac_of_life_used = d_sim/self.d_eol
+        sim_time_dt = len(V_deg) 
+        #time between replacement [hrs] based on simulation length
+        time_between_replacement = (1/frac_of_life_used)*sim_time_dt
+
+        return time_between_replacement
+    def calculate_capacity_factor(self):
+        pass
+    def calculate_efficiency(self,hydrogen_produced,power_consumed):
+        return power_consumed/hydrogen_produced
+        
+    def run_LTA_analysis(self,V_deg,V_cell_nom,I_stack_nom):
+        from greenheart.simulation.technologies.hydrogen.electrolysis.alkaline_LTA import alkaline_LTA
+        lta = alkaline_LTA(self)
+        if self.penalize_hydrogen_production:
+            lta.annual_performance_for_degradation_applied_to_output(V_deg,V_cell_nom,I_stack_nom)
+        else:
+            lta.annual_performance_for_degradation_applied_to_input(V_deg,V_cell_nom,I_stack_nom)
 
 
     def run_cluster_variable_power(self,input_external_power_kW):
