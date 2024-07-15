@@ -87,7 +87,7 @@ class ALK_Clusters:
 
         self.eol_eff_drop = eol_eff_percent_loss/100
         self.d_eol=self.find_eol_voltage_val(eol_eff_percent_loss)
-        self.BOL_design_info.update({"EOL Degradation Value [V/cell]":self.d_eol})
+        self.BOL_design_info.update({"EOL Cell Voltage Degradation Value [V/cell]":self.d_eol})
         # CELL DEGRADATION RATES
         self.steady_deg_rate = self.reset_uptime_degradation_rate(uptime_hours_until_eol)
         self.onoff_deg_rate = self.reset_on_off_degradation_rate(n_cycles_until_eol)
@@ -107,8 +107,8 @@ class ALK_Clusters:
     def describe_degradation_rates(self):
         n_hours_until_eol_uptime = self.d_eol/(self.steady_deg_rate*self.V_cell_nominal*3600)
         n_off_cycles_until_eol = self.d_eol/(self.onoff_deg_rate)
-        self.BOL_design_info.update({"Max Operational Hours Until EOL":n_hours_until_eol_uptime,
-        "Max Off-cycles Until EOL":n_off_cycles_until_eol})
+        self.BOL_design_info.update({"Max Stack Operational Hours Until EOL":n_hours_until_eol_uptime,
+        "Max Stack Off-cycles Until EOL":n_off_cycles_until_eol})
     def system_design(self,T_stack):
         self.T_stack = T_stack
         self.min_current_density = self.turndown_ratio*self.nominal_current_density
@@ -150,10 +150,11 @@ class ALK_Clusters:
         keys = ["BOL Rated {}".format(k) for k in key_desc]
         vals = [self.cluster_nominal_h2_kg,self.cluster_rating_kW,self.nominal_current,self.V_cell_nominal,self.cluster_rating_kW/self.cluster_nominal_h2_kg]
 
-        keys += ["Minimum {}".format(k) for k in key_desc]
+        keys += ["BOL Minimum {}".format(k) for k in key_desc]
         vals +=[self.cluster_min_h2_kg,self.min_cluster_power_kW,self.min_current,self.V_cell_min,self.min_cluster_power_kW/self.cluster_min_h2_kg]
 
         self.BOL_design_info.update(dict(zip(keys,vals)))
+        self.BOL_design_info.update({"n_stacks/cluster":self.n_stacks,"n_cells/stack":self.n_cells,"Minimum Stack Power [kW]":self.min_stack_power_kW})
         []
 # -------------------------------------------- #      
 # ----- OPERATIONAL CONSTRAINTS & LOSSES ----- #

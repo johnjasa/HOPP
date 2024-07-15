@@ -63,45 +63,19 @@ class AlkalineSupervisor:
                 annual_LTA = pd.concat([annual_LTA,lta_annual_df],axis=1)
                 clusters[ci].LTA_results_average #not updated
                 average_LTA = pd.concat([average_LTA,pd.Series(clusters[ci].LTA_results_average,name=cluster_ID)],axis=1)
-
-        res = {"Time Series":results_timeseries,"Summary":results_summary,"Performance By Year":annual_LTA,"Average Lifetime Performance":average_LTA,"System Design":sys_design}
+        if clusters[0].run_LTA:
+            res = {"Time Series":results_timeseries,"Summary":results_summary,"Performance By Year":annual_LTA,"Average Lifetime Performance":average_LTA,"System Design":sys_design}
+        else:
+            res = {"Time Series":results_timeseries,"Summary":results_summary,"System Design":sys_design}
         return res, power_consumption_total,hydrogen_production_total
-        # power_to_clusters = self.even_split_power(input_power_kW,clusters)
-        # h2_df_ts = pd.DataFrame()
-        # h2_df_tot = pd.DataFrame()
-        # col_names = []
-        # for ci, cluster in enumerate(clusters):
-        #     cl_name = "Cluster #{}".format(ci)
-        #     col_names.append(cl_name)
-        #     h2_ts, h2_tot = clusters[ci].run(power_to_clusters[ci])
-        #     # h2_dict_ts['Cluster #{}'.format(ci)] = h2_ts
-
-        #     h2_ts_temp = pd.Series(h2_ts, name=cl_name)
-        #     h2_tot_temp = pd.Series(h2_tot, name=cl_name)
-        #     if len(h2_df_tot) == 0:
-        #         h2_df_tot = pd.concat(
-        #             [h2_df_tot, h2_tot_temp], axis=0, ignore_index=False
-        #         )
-        #         h2_df_tot.columns = col_names
-
-        #         h2_df_ts = pd.concat([h2_df_ts, h2_ts_temp], axis=0, ignore_index=False)
-        #         h2_df_ts.columns = col_names
-        #     else:
-        #         # h2_df_ts = h2_df_ts.join(h2_ts_temp)
-        #         h2_df_tot = h2_df_tot.join(h2_tot_temp)
-        #         h2_df_tot.columns = col_names
-
-        #         h2_df_ts = h2_df_ts.join(h2_ts_temp)
-        #         h2_df_ts.columns = col_names
-        # pass
 
     def even_split_power_sequential(self):
         pass
 
     def even_split_hydrogen(self,hydrogen_demand_profile_kg,clusters):
         #NOTE: assumes all clusters are the same rating and capcaity
-        i=0
-        num_clusters_on = np.floor(hydrogen_demand_profile_kg / clusters[i].cluster_min_h2_kg)
+        #assumes all electrolyzer clusters are rated the same
+        num_clusters_on = np.floor(hydrogen_demand_profile_kg / clusters[0].cluster_min_h2_kg)
         num_clusters_on = np.where(
             num_clusters_on > len(clusters), len(clusters), num_clusters_on
         )
@@ -124,10 +98,8 @@ class AlkalineSupervisor:
         return np.transpose(hydrogen_signal_for_clusters)
     def even_split_power(self,input_power_kW,clusters):
         #NOTE: assumes all clusters are the same rating and capcaity
-        i=0
-        clusters[i].cluster_rating_kW
-        clusters[i].min_cluster_power_kW
-        num_clusters_on = np.floor(input_power_kW / clusters[i].min_cluster_power_kW)
+        #assumes all electrolyzer clusters are rated the same
+        num_clusters_on = np.floor(input_power_kW / clusters[0].min_cluster_power_kW)
         num_clusters_on = np.where(
             num_clusters_on > len(clusters), len(clusters), num_clusters_on
         )
@@ -164,7 +136,7 @@ class AlkalineSupervisor:
         return clusters
 
 if __name__ == "__main__":
-    
+    from greenheart.simulation.technologies.hydrogen.electrolysis.alkaline_system import combine_results_across_clusters
     electrolyzer_size_MW = 2
     cluster_size_MW = 1
     input_signal_type = "power"
@@ -188,5 +160,6 @@ if __name__ == "__main__":
     t_sim = 8760
     n_rep = int(np.ceil(t_sim/n_timesteps))
     input_signal = np.tile(power_in,n_rep)[:t_sim]
-    sup.run(clusters,input_signal)
+    res, power_consumption_total,hydrogen_production_total = sup.run(clusters,input_signal)
+    combine_results_across_clusters(res)
     []
