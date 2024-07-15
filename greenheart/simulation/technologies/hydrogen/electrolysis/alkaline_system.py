@@ -96,6 +96,12 @@ def combine_results_across_clusters(res):
     design_summary = combine_system_design(res["System Design"])
     H2_Results.update({"System Design":design_summary})
 
+    if "Power" in list(res["Controller Output"].keys())[0]:
+        ts_df["Power Curtailed [kW]"] += res["Controller Output"]["Curtailed Power [kW]"]
+    if "H2 Demand" in list(res["Controller Output"].keys())[0]:
+        temp = pd.DataFrame(res["Controller Output"]["Curtailed H2 Demand [kg]"],columns=["Curtailed H2 Demand [kg]"])
+        ts_df = pd.concat([ts_df,temp],axis=1)
+
     if "Performance By Year" in res.keys():
         lta_res = combine_annual_LTA_across_clusters(res["Performance By Year"])
         H2_Results.update({"Performance By Year":lta_res})
@@ -111,26 +117,32 @@ def run_alkaline_physics(input_signal,input_signal_type,electrolyzer_size_MW,ele
         longer desc:cite:`jvm-jensen1983note`
 
         Args:
-            input_signal (np.NDarray or float): options are. signal must correspond to input_signal_type
+            input_signal (np.NDarray or float): signal must correspond to input_signal_type. may either be:
                 - hydrogen demand profile in kg/hr (float or array) or 
                 - input power in kW
             input_signal_type (str): options are "power" or "h2"
-            degradation_application (str): options are "power" or "h2"
-            control_strategy (str): options are "even_split"
-
-            alkaline_config (dict): _description_
-            V_init (_type_): _description_
-            V_deg (_type_): _description_
+            electrolyzer_size_MW (int): electrolyzer system capacity
+            electrolyzer_config (dict):
+                - cluster_size_mw (int): cluster capacity in MW
+                - plant_life (int): plant life in years
+                - operation_config (dict):
+                    - control_strategy (str): only option is "even-split" so far
+                - alk_config (dict): see docstring of optional inputs for ALK_electrolyzer_clusters
+                    
+            return_all_results (bool,optional): whether to return all results or just primary ones. Default is False.
 
         Returns:
-            _type_: _description_
-        
+            H2_Results (dict): dictionary of summarized results from all clusters in simulation
+            power_consumption_total: electrolyzer power usage profile in kW, same length as input_signal
+            hydrogen_production_total (np.NDArray): hydrogen production profile in kg, same length as input_signal
+            res (dict,optional): detailed cluster-level results from simulation
         """
-    alk_config = electrolyzer_config["cluster_config"]
-    control_config = electrolyzer_config["operation_config"]
+    alk_config = electrolyzer_config["alk_config"]
+    # control_config = electrolyzer_config["operation_config"]
+    # control_strategy = control_config["control_strategy"]
     control_strategy = "even_split"
-    cluster_size_MW = alk_config["cluster_size_mw"]
-    plant_life = alk_config["plant_life"]
+    cluster_size_MW = electrolyzer_config["cluster_size_mw"]
+    plant_life = electrolyzer_config["plant_life"]
     num_clusters = int(np.ceil(electrolyzer_size_MW/cluster_size_MW))
     sup = AlkalineSupervisor(electrolyzer_size_MW,cluster_size_MW,input_signal_type,control_strategy,plant_life)
     
@@ -140,6 +152,6 @@ def run_alkaline_physics(input_signal,input_signal_type,electrolyzer_size_MW,ele
     if return_all_results:
         return H2_Results,power_consumption_total,hydrogen_production_total,res
     else:
-        return H2_Results,power_consumption_total,hydrogen_production_total,
+        return H2_Results,power_consumption_total,hydrogen_production_total
     
 

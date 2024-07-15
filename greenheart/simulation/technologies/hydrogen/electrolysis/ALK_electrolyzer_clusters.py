@@ -29,25 +29,60 @@ class ALK_Clusters:
     lhv: float = 33.33  # lower heating value of H2 [kWh/kg]
     hhv: float = 39.41  # higher heating value of H2 [kWh/kg]
     gibbs: float = 237.24e3  # Gibbs Energy of global reaction (J/mol)
-    def __init__(self,cluster_size_mw,plant_life,include_degradation_penalty = True,run_LTA = True,debug_mode = False):
-        self.dt = 3600 #sec/timestep
-        self.include_degradation_penalty = include_degradation_penalty #unused
-        self.penalize_hydrogen_production = True #TODO: make input
-        eol_eff_percent_loss = 10
-        uptime_hours_until_eol = 77600
-        n_cycles_until_eol = 614
-        water_usage_mass_ratio = 10 #10 kg H2O: 1 kg H2
+    def __init__(self,
+            cluster_size_mw:int,
+            plant_life:int,
+            include_degradation_penalty = True,
+            run_LTA = True,
+            debug_mode = True,
+            penalize_hydrogen_production = True,
+            dt = 3600,
+            eol_eff_percent_loss = 10,
+            uptime_hours_until_eol = 80000,
+            n_cycles_until_eol = 614,
+            ramp_rate_percent = 0.2,
+            turndown_ratio = 0.25,
+            cold_start_delay = 1800,
+        ):
+        """_summary_
 
-        self.run_LTA = run_LTA
+        Args:
+            cluster_size_mw (int): cluster capacity in MW
+            plant_life (int): electrolysis system plant life in years
+            include_degradation_penalty (bool, optional): include degradation or not. Defaults to True.
+            run_LTA (bool, optional): run life-time performance assessment. Defaults to True.
+            debug_mode (bool, optional): True: return detailed results. Defaults to True.
+            penalize_hydrogen_production (bool, optional): Defaults to True.
+                True: degradation results in hydrogen losses. 
+                False: degradation results in power increase. 
+            dt (int, optional): seconds per timestep. Defaults to 3600.
+            eol_eff_percent_loss (int, optional): % change from BOL rated efficiency that indicates stack needs replaced.
+                Defaults to 10.
+            uptime_hours_until_eol (int, optional): to customize uptime degradation rate. Defaults to 80000.
+            n_cycles_until_eol (int, optional): to customize off-cycle degradation rate. Defaults to 614.
+            ramp_rate_percent (float, optional): max change in current between timesteps given as a percentage. Defaults to 0.2.
+            turndown_ratio (float, optional): percent of rated current to be "on". Defaults to 0.25.
+            cold_start_delay (int, optional): warm-up delay in seconds. Defaults to 1800.
+        """
+        
+        self.include_degradation_penalty = include_degradation_penalty 
+        if not self.include_degradation_penalty:
+            self.run_LTA = False
+        else:
+            self.run_LTA = run_LTA
+
+        self.penalize_hydrogen_production = penalize_hydrogen_production
+        self.dt = dt #sec/timestep
+        # OPERATIONAL CONSTRIANTS
+        self.ramp_rate_percent = ramp_rate_percent #percent of rated current per second
+        self.turndown_ratio = turndown_ratio
+        self.cold_start_delay = cold_start_delay #sec to warm up from cold
+        # water_usage_mass_ratio = 10 #10 kg H2O: 1 kg H2
         
         # OPERATIONAL CONSTRIANTS
         # cell_nominal_current_density = 0.3 #[A/cm^2]
         self.nominal_current_density = 0.4 #[A/cm^2]
-        self.ramp_rate_percent = 0.2 #percent of rated current per second
         
-        self.turndown_ratio = 0.25 
-        self.cold_start_delay = 1800 #sec to warm up from cold
-
         # OPERATING CONDITIONS
         self.pressure_operating = 1 #1 # [bar] operating pressure
         T_stack = 60 #Celsius

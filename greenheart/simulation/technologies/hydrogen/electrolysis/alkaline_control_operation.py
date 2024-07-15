@@ -17,19 +17,21 @@ class AlkalineSupervisor:
         # clusters = self.create_clusters(num_clusters,cluster_size_MW,alk_kwargs)
 
     def run(self,clusters,input_signal_profile):
-
+        control_output = {}
         if self.input_signal_type == "power":
             print("running power control")
             if self.control_strategy == "even_split":
                 power_to_clusters = self.even_split_power(input_signal_profile,clusters)
                 control_power_curtailed = input_signal_profile - np.sum(power_to_clusters,axis=0)
+                control_output.update({"Curtailed Power [kW]":control_power_curtailed})
         if self.input_signal_type == "h2":
             print("running h2 control")
             if self.control_strategy == "even_split":
                 # H2_required_cluster_kg = self.even_split_hydrogen(hydrogen_demand_profile_kg,clusters)
                 H2_required_cluster_kg = self.even_split_hydrogen(input_signal_profile,clusters)
                 control_h2_demand_curtailed = input_signal_profile - np.sum(H2_required_cluster_kg,axis=0)
-
+                control_output.update({"Curtailed H2 Demand [kg]":control_h2_demand_curtailed})
+        
         results_timeseries = pd.DataFrame()
         results_summary = pd.DataFrame()
         annual_LTA = pd.DataFrame()
@@ -64,9 +66,9 @@ class AlkalineSupervisor:
                 clusters[ci].LTA_results_average #not updated
                 average_LTA = pd.concat([average_LTA,pd.Series(clusters[ci].LTA_results_average,name=cluster_ID)],axis=1)
         if clusters[0].run_LTA:
-            res = {"Time Series":results_timeseries,"Summary":results_summary,"Performance By Year":annual_LTA,"Average Lifetime Performance":average_LTA,"System Design":sys_design}
+            res = {"Controller Output":control_output,"Time Series":results_timeseries,"Summary":results_summary,"Performance By Year":annual_LTA,"Average Lifetime Performance":average_LTA,"System Design":sys_design}
         else:
-            res = {"Time Series":results_timeseries,"Summary":results_summary,"System Design":sys_design}
+            res = {"Controller Output":control_output,"Time Series":results_timeseries,"Summary":results_summary,"System Design":sys_design}
         return res, power_consumption_total,hydrogen_production_total
 
     def even_split_power_sequential(self):
