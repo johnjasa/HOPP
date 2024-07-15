@@ -8,6 +8,7 @@ class alkaline_LTA:
         
     def annual_performance_for_degradation_applied_to_output(self,V_deg,V_cell,I_nom):
         #NOTE: only validated for year long simulations
+        #DOES NOT WORK IF CLUSTER DIES WITHIN A YEAR
         cluster_status = self.sys.calc_cluster_status(I_nom)
         h2_multiplier = self.sys.cluster_warm_up_losses(cluster_status)
 
@@ -20,11 +21,12 @@ class alkaline_LTA:
         for y in range(int(self.plant_life_years)): #assuming sim is close to a year
             V_deg_pr_sim = Vdeg0 + V_deg
             if np.max(V_deg_pr_sim)>self.sys.d_eol:
+                
                 idx_dead = np.argwhere(V_deg_pr_sim>self.sys.d_eol)[0][0]
                 V_deg_pr_sim = np.concatenate([V_deg_pr_sim[0:idx_dead],V_deg[idx_dead:l_sim]])
                 refturb_schedule[y]=self.sys.n_stacks
 
-            I_stack = self.sys.stack_degraded_current(I_nom,V_cell,V_deg)
+            I_stack = self.sys.stack_degraded_current(I_nom,V_cell,V_deg_pr_sim)
             
             h2_kg_pr_hr_system_nom = self.sys.cell_H2_production_rate(self.sys.T_stack,I_stack)*self.sys.n_cells*self.sys.n_stacks
             h2_kg_pr_hr_system = h2_kg_pr_hr_system_nom*h2_multiplier
@@ -39,10 +41,16 @@ class alkaline_LTA:
         self.sys.LTA_results_annual['Capacity Factor [-]'] = annual_capacity_factor
         self.sys.LTA_results_annual['Refurbishment Schedule [stacks replaced/year]'] = refturb_schedule
         self.sys.LTA_results_annual['Annual H2 Production [kg/year]'] = annual_hydrogen_production_kg
-        self.sys.LTA_results_annual['Annual Energy Used [kWh/year]'] = power_consumption_kW
+        self.sys.LTA_results_annual['Annual Energy Used [kWh/year]'] = annual_power_consumption_kW
+        self.sys.LTA_results_annual['Annual Average Efficiency [kWh/kg]'] = annual_power_consumption_kW/annual_hydrogen_production_kg
+        self.sys.LTA_results_annual['Annual Average Efficiency [%-HHV]'] = self.sys.hhv/(annual_power_consumption_kW/annual_hydrogen_production_kg)
         
+        self.sys.LTA_results_average['Capacity Factor [-]'] = np.mean(annual_capacity_factor)
+        self.sys.LTA_results_average['Annual H2 Production [kg/year]'] = np.mean(annual_hydrogen_production_kg)
+        self.sys.LTA_results_average['Annual Energy Used [kWh/year]'] = np.mean(annual_power_consumption_kW)
+        self.sys.LTA_results_average['Annual Average Efficiency [kWh/kg]'] = np.mean(annual_power_consumption_kW)/np.mean(annual_hydrogen_production_kg)
+        self.sys.LTA_results_average['Annual Average Efficiency [%-HHV]'] = self.sys.hhv/(np.mean(annual_power_consumption_kW)/np.mean(annual_hydrogen_production_kg))
         
-
     def annual_performance_for_degradation_applied_to_input(self,V_deg,V_cell,I_nom):
         #NOTE: only validated for year long simulations
         cluster_status = self.sys.calc_cluster_status(I_nom)
