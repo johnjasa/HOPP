@@ -4,6 +4,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
+def estimate_alkaline_system_mass_footprint(electrolyzer_size_mw):
+    pass
 def gibbs_temp_pressure(T_c):
     #https://webbook.nist.gov/cgi/inchi/InChI%3D1S/H2O/h1H2
     #^ shomate equatiom
