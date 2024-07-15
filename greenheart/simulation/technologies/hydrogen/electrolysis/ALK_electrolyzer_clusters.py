@@ -315,6 +315,7 @@ class ALK_Clusters:
         
         self.simulation_results.update({"Simulation Time Until Replacement [hrs]":time_between_replacement_hours})
         self.simulation_results.update({"Simulation Stack Life [hrs]":stack_life_hours})
+        self.simulation_results.update({"Simulation Capacity Factor [-]":np.sum(hydrogen_produced_kg)/(self.cluster_nominal_h2_kg*len(hydrogen_produced_kg))})
 
         return power_consumed_kW,hydrogen_produced_kg
 

@@ -158,5 +158,5 @@ if __name__ == "__main__":
     n_rep = int(np.ceil(t_sim/n_timesteps))
     input_signal = np.tile(power_in,n_rep)[:t_sim]
     res, power_consumption_total,hydrogen_production_total = sup.run(clusters,input_signal)
-    combine_results_across_clusters(res)
+    H2_Results = combine_results_across_clusters(res)
     []

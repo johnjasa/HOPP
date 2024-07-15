@@ -59,6 +59,14 @@ def combine_system_design(sys_des):
     temp = pd.Series(temp,index=["System: EOL Rated H2 Production [kg/dt]"])
     design_summary = pd.concat([design_summary,temp],axis=0)
 
+    temp = sys_des.loc["BOL Rated Cluster Power [kW]"].sum()
+    temp = pd.Series(temp,index=["System: BOL Rated Power [kW]"])
+    design_summary = pd.concat([design_summary,temp],axis=0)
+
+    temp = len(sys_des.columns.to_list())
+    temp = pd.Series(temp,index=["n_clusters/system"])
+    design_summary = pd.concat([design_summary,temp],axis=0)
+
 
     sys_design_keys_init = sys_des.index.to_list()
     new_keys = []
@@ -76,7 +84,7 @@ def combine_results_across_clusters(res):
     H2_Results = {}
     sum_df = pd.DataFrame()
     summary_keys_sum = ["Total Curtailed Power [kW/sim]","Total Hydrogen Production [kg/sim]","Total Power Usage [kW/sim]","Total Hydrogen Losses [kg/sim]"]
-    summary_keys_average = ["Simulation Time Until Replacement [hrs]","Simulation Stack Life [hrs]","On-time/sim [hrs]","Off-cycles/sim"]
+    summary_keys_average = ["Simulation Time Until Replacement [hrs]","Simulation Stack Life [hrs]","On-time/sim [hrs]","Off-cycles/sim","Simulation Capacity Factor [-]"]
     for k in summary_keys_sum:
         tot = res["Summary"].loc[k].sum()
         tot = pd.Series(tot,index=[k])
