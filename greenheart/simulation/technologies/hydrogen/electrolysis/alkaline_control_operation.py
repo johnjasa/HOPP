@@ -5,16 +5,11 @@ import pandas as pd
 class AlkalineSupervisor:
     def __init__(self,electrolyzer_size_MW,cluster_size_MW,input_signal_type,control_strategy,plant_life):
         self.plant_life = plant_life
-        # if alkaline_config is None:
-        #     alk_kwargs = {}
-        # else:
-        #     alk_kwargs = alkaline_config
         num_clusters = int(np.ceil(electrolyzer_size_MW/cluster_size_MW))
         self.electrolyzer_size_MW = num_clusters*cluster_size_MW
         self.n_clusters = num_clusters
         self.input_signal_type = input_signal_type
         self.control_strategy = control_strategy
-        # clusters = self.create_clusters(num_clusters,cluster_size_MW,alk_kwargs)
 
     def run(self,clusters,input_signal_profile):
         control_output = {}

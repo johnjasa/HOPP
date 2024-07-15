@@ -1,6 +1,7 @@
 from greenheart.simulation.technologies.hydrogen.electrolysis.alkaline_control_operation import AlkalineSupervisor
 import numpy as np
 import pandas as pd
+
 def combine_timeseries_across_clusters(timeseries_df):
     ts_df = pd.DataFrame()
     time_series_cols = [timeseries_df.columns.to_list()[i][0] for i in range(len(timeseries_df.columns.to_list()))]
@@ -45,7 +46,6 @@ def combine_average_LTA_across_clusters(lta_df_avg):
 def combine_system_design(sys_des):
     design_summary = pd.DataFrame()
     sys_levels = ["System","Cluster ","Stack ","Cell "]
-    sys_tot_keys = ["EOL Stack Rated H2 Production [kg/dt]","Minimum Cluster H2 Production [kg/dt]","BOL Rated Cluster H2 Production [kg/dt]"]
     
     temp = sys_des.loc["BOL Rated Cluster H2 Production [kg/dt]"].sum()
     temp = pd.Series(temp,index=["System: BOL Rated H2 Production [kg/dt]"])
@@ -71,6 +71,7 @@ def combine_system_design(sys_des):
     design_summary = pd.concat([design_summary,temp],axis=0)
     design_summary.columns = ["System Design"]
     return design_summary
+
 def combine_results_across_clusters(res):
     H2_Results = {}
     sum_df = pd.DataFrame()
@@ -87,9 +88,6 @@ def combine_results_across_clusters(res):
     sum_df.columns = ["Simulation Summary"]
     
     H2_Results.update({"Simulation Summary":sum_df})
-    # sum_keys_original = sum_df.index.to_list()
-    # sum_keys_new = ["Simulation: {}".format(k) for k in sum_keys_original]
-    # sum_df.rename(index = dict(zip(sum_keys_original,sum_keys_new)))
     
     ts_df = combine_timeseries_across_clusters(res["Time Series"])
     H2_Results.update({"Time Series":ts_df})
@@ -138,6 +136,7 @@ def run_alkaline_physics(input_signal,input_signal_type,electrolyzer_size_MW,ele
             res (dict,optional): detailed cluster-level results from simulation
         """
     alk_config = electrolyzer_config["alk_config"]
+    #TODO: once more control-specific options are added, include operation_config as a used input
     # control_config = electrolyzer_config["operation_config"]
     # control_strategy = control_config["control_strategy"]
     control_strategy = "even_split"

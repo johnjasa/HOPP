@@ -4,11 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-def get_BOL_rated_performance(self2):
-    pass
-def custom_steady_degradation_rate(self2):
-    pass
-def gibbs_temp_pressure(self2,T_c):
+def gibbs_temp_pressure(T_c):
     #https://webbook.nist.gov/cgi/inchi/InChI%3D1S/H2O/h1H2
     #^ shomate equatiom
     T_k=T_c+ 273.15  # convert Celsius to Kelvin
