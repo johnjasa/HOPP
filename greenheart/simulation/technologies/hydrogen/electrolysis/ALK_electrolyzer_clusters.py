@@ -31,10 +31,13 @@ class ALK_Clusters:
     gibbs: float = 237.24e3  # Gibbs Energy of global reaction (J/mol)
     def __init__(self,cluster_size_mw,plant_life,include_degradation_penalty = True,run_LTA = True,debug_mode = False):
         self.dt = 3600 #sec/timestep
-        include_degradation_penalty = True
+        self.include_degradation_penalty = include_degradation_penalty #unused
         self.penalize_hydrogen_production = True #TODO: make input
         eol_eff_percent_loss = 10
         uptime_hours_until_eol = 77600
+        n_cycles_until_eol = 614
+        water_usage_mass_ratio = 10 #10 kg H2O: 1 kg H2
+
         self.run_LTA = run_LTA
         
         # OPERATIONAL CONSTRIANTS
@@ -70,9 +73,11 @@ class ALK_Clusters:
         
 
         # CELL DEGRADATION RATES
-        self.onoff_deg_rate =  3.0726072607260716e-04 #[V/off-cycle]
+        # self.onoff_deg_rate =  3.0726072607260716e-04 #[V/off-cycle]
+        # n_cycles_until_eol = 614
         self.rate_fatigue = 1.2820512820512823e-05 #multiply by rf_track
-        self.steady_deg_rate = 5.092592592592592e-09 #V/sec
+        # self.steady_deg_rate = 5.092592592592592e-09 #V/sec
+        #uptime_hours_until_eol = 5442.3
 
         # INITIALIZATION
         self.initalize_outputs(plant_life,run_LTA,debug_mode)
@@ -83,12 +88,27 @@ class ALK_Clusters:
         self.eol_eff_drop = eol_eff_percent_loss/100
         self.d_eol=self.find_eol_voltage_val(eol_eff_percent_loss)
         self.BOL_design_info.update({"EOL Degradation Value [V/cell]":self.d_eol})
+        # CELL DEGRADATION RATES
+        self.steady_deg_rate = self.reset_uptime_degradation_rate(uptime_hours_until_eol)
+        self.onoff_deg_rate = self.reset_on_off_degradation_rate(n_cycles_until_eol)
+        self.describe_degradation_rates()
     # def design_stack(self,T_stack,tol_kW = 1):
     #     self.system_design(T_stack)
     #     inital_error_kW = abs(self.stack_rating_kW - self.stack_rating_kW)
     #     if inital_error_kW>tol_kW:
     #         cell_power_W = self.nominal_current*self.V_cell_nominal
-
+    def reset_on_off_degradation_rate(self,n_cycles_until_eol):
+        onoff_deg_rate = self.d_eol/n_cycles_until_eol
+        return onoff_deg_rate
+    def reset_uptime_degradation_rate(self,uptime_hours_until_eol):
+        
+        steady_deg_rate = self.d_eol/(self.V_cell_nominal*uptime_hours_until_eol*3600)
+        return steady_deg_rate
+    def describe_degradation_rates(self):
+        n_hours_until_eol_uptime = self.d_eol/(self.steady_deg_rate*self.V_cell_nominal*3600)
+        n_off_cycles_until_eol = self.d_eol/(self.onoff_deg_rate)
+        self.BOL_design_info.update({"Max Operational Hours Until EOL":n_hours_until_eol_uptime,
+        "Max Off-cycles Until EOL":n_off_cycles_until_eol})
     def system_design(self,T_stack):
         self.T_stack = T_stack
         self.min_current_density = self.turndown_ratio*self.nominal_current_density
@@ -116,8 +136,8 @@ class ALK_Clusters:
         self.min_cluster_power_kW = self.min_stack_power_kW*self.n_stacks
 
         cell_nominal_h2_kg = self.cell_H2_production_rate(T_stack,self.nominal_current)
-        stack_nominal_h2_kg = cell_nominal_h2_kg*self.n_cells #[kg H2/dt-stack]
-        self.cluster_nominal_h2_kg = stack_nominal_h2_kg*self.n_stacks #[kg H2/dt-cluster]
+        self.stack_nominal_h2_kg = cell_nominal_h2_kg*self.n_cells #[kg H2/dt-stack]
+        self.cluster_nominal_h2_kg = self.stack_nominal_h2_kg*self.n_stacks #[kg H2/dt-cluster]
 
         cell_min_h2_kg = self.cell_H2_production_rate(T_stack,self.min_current)
         stack_min_h2_kg = cell_min_h2_kg*self.n_cells #[kg H2/dt-stack]
@@ -148,9 +168,10 @@ class ALK_Clusters:
             lta_keys = ['Capacity Factor [-]','Refurbishment Schedule [stacks replaced/year]','Annual H2 Production [kg/year]']
             lta_keys += ['Annual Average Efficiency [kWh/kg]','Annual Average Efficiency [%-HHV]','Annual Energy Used [kWh/year]']
             x = [[None]*len(lta_keys) for _ in range(plant_life)]
-            self.LTA_results_average = pd.DataFrame(data=x,index=years,columns=lta_keys)
-            self.LTA_results_annual = dict(zip(lta_keys,[None]*len(lta_keys)))
-
+            self.LTA_results_annual = pd.DataFrame(data=x,index=years,columns=lta_keys)
+            self.LTA_results_average = dict(zip(lta_keys,[None]*len(lta_keys)))
+            self.LTA_results_average.pop('Refurbishment Schedule [stacks replaced/year]')
+            
             timeseries_keys += ["I_stack_nom","V_cell","V_deg"]
         if debug_mode:
             timeseries_keys += ["I_stack_deg","Actual Power Input [kW]","Cluster Status"]
@@ -159,12 +180,27 @@ class ALK_Clusters:
         self.BOL_design_info = {}
         self.timeseries_results = dict(zip(timeseries_keys,[None]*len(timeseries_keys)))
     def find_eol_voltage_val(self,eol_eff_percent_loss):
+        eol_eff_mult = (100+eol_eff_percent_loss)/100
+        h2_eol_stack =self.stack_nominal_h2_kg/eol_eff_mult
+        # h2_eol = s(elf.cluster_nominal_h2_kg/eol_eff_mult)/self.n_stacks
+        i_eol = self.stack_reverse_faradays(h2_eol_stack)
+        # V_bol = self.cell_design(self.T_stack,self.nominal_current)
+
+        d_eol = ((self.nominal_current*self.V_cell_nominal)/i_eol) - self.V_cell_nominal
+        # eol_eff_kWh_per_kg = bol_eff_kWh_per_kg*(1+eol_eff_percent_loss/100)
+        
+        self.BOL_design_info.update({"EOL Stack Rated H2 Production [kg/dt]":h2_eol_stack})
+
+        return d_eol
+    def x_find_eol_voltage_val(self,eol_eff_percent_loss):
         #HASN'T BEEN VERIFIED
         bol_eff_kWh_per_kg = self.cluster_rating_kW/self.cluster_nominal_h2_kg
-        self.nominal_current
+        
+        
         V_cell_nominal = self.cell_design(self.T_stack,self.nominal_current)
         eol_eff_kWh_per_kg = bol_eff_kWh_per_kg*(1+eol_eff_percent_loss/100)
         eol_power_consumed_kWh = eol_eff_kWh_per_kg*self.cluster_nominal_h2_kg
+        self.BOL_design_info.update({"EOL Rated Efficiency [kWh/kg]":eol_eff_kWh_per_kg})
         v_tot_eol=eol_power_consumed_kWh*1000/(self.n_cells*self.nominal_current)
         d_eol = v_tot_eol - V_cell_nominal
         return d_eol
@@ -172,7 +208,10 @@ class ALK_Clusters:
         total_curtailed_power_kW = self.cluster_calc_curtailed_power(input_external_power_kW)
         power_to_electrolyzer_kW = input_external_power_kW - total_curtailed_power_kW
         return power_to_electrolyzer_kW
-
+    def check_current_bounds(self,I_stack_nom):
+        I_stack_nom_sat = np.where(I_stack_nom<self.min_current,0,I_stack_nom)
+        I_stack_nom_sat = np.where(I_stack_nom_sat>self.nominal_current,self.nominal_current,I_stack_nom_sat)
+        return I_stack_nom_sat
     def cluster_warm_up_losses(self,cluster_status):
         warm_up_ratio = 1 - (self.cold_start_delay/self.dt)
         #no delay at beginning of sim
@@ -231,11 +270,16 @@ class ALK_Clusters:
         self.add_simulation_results("Hydrogen Losses [kg]",hydrogen_losses_kg,True)
         #11. run additional post-processing
         #calculate_efficiency()
-        #estimate_time_between_replacement()
-        #estimate_stack_life()
+        time_between_replacement_hours = self.estimate_time_between_replacement(V_deg)
+        stack_life_hours = self.estimate_stack_life(V_deg,cluster_status)
         if self.run_LTA:
             self.run_LTA_analysis(V_deg,V_cell_nom,I_stack_nom)
+            avg_years_until_replacement = int(np.floor(time_between_replacement_hours/8760))
+            self.LTA_results_average.update({"Years between stack replacement":avg_years_until_replacement})
         
+        self.simulation_results.update({"Simulation Time Until Replacement [hrs]":time_between_replacement_hours})
+        self.simulation_results.update({"Simulation Stack Life [hrs]":stack_life_hours})
+
         return power_consumed_kW,hydrogen_produced_kg
 
     def estimate_stack_life(self,V_deg,cluster_status):
@@ -246,8 +290,8 @@ class ALK_Clusters:
         frac_of_life_used = d_sim/self.d_eol
         operational_time_dt=np.sum(cluster_status) 
         #stack life [hrs] based on number of hours operating
-        stack_life = (1/frac_of_life_used)*operational_time_dt #[hrs]
-
+        stack_life = (1/frac_of_life_used)*operational_time_dt*(self.dt/3600) #[hrs]
+        # self.simulation_results.update({"Simulation Stack Life [hrs]":stack_life})
         return stack_life
     def estimate_time_between_replacement(self,V_deg):
         #based on existance (simulation time)
@@ -255,8 +299,8 @@ class ALK_Clusters:
         frac_of_life_used = d_sim/self.d_eol
         sim_time_dt = len(V_deg) 
         #time between replacement [hrs] based on simulation length
-        time_between_replacement = (1/frac_of_life_used)*sim_time_dt
-
+        time_between_replacement = (1/frac_of_life_used)*sim_time_dt*(self.dt/3600)
+        # self.simulation_results.update({"Simulation Time Until Replacement [hrs]":time_between_replacement})
         return time_between_replacement
     def calculate_capacity_factor(self):
         pass
@@ -284,6 +328,9 @@ class ALK_Clusters:
         #1. convert power to nominal (undegraded) current
         power_per_stack_kW = input_external_power_kW/self.n_stacks
         I_stack_nom = stack_power_to_current((power_per_stack_kW,self.T_stack),*self.curve_coeff)
+        I_stack_nom = np.nan_to_num(I_stack_nom)
+        I_stack_nom = self.check_current_bounds(I_stack_nom)
+        
         power_consumed_kW,hydrogen_produced_kg = self.run_cluster(I_stack_nom)
         return power_consumed_kW,hydrogen_produced_kg
 
@@ -337,6 +384,7 @@ class ALK_Clusters:
 
     def calc_cluster_status(self,I_stack):
         #NOTE: should on/off be determined by current or current density or power?
+        # I_stack = np.nan_to_num(I_stack)
         cluster_status=np.where(I_stack<self.min_current,0,1)
 
         return cluster_status
@@ -344,17 +392,17 @@ class ALK_Clusters:
         excess_power_curtailed_kW = np.where(input_external_power_kW > self.cluster_rating_kW,\
         input_external_power_kW - self.cluster_rating_kW,0)
 
-        minimum_power_kW = self.turndown_ratio*self.cluster_rating_kW
-        below_turndown_power_curtailed_kW = np.where(input_external_power_kW<minimum_power_kW,minimum_power_kW,0)
+        #minimum_power_kW = self.turndown_ratio*self.cluster_rating_kW
+        below_turndown_power_curtailed_kW = np.where(input_external_power_kW<self.min_cluster_power_kW,input_external_power_kW,0)
         total_curtailed_power_kW = below_turndown_power_curtailed_kW + excess_power_curtailed_kW
         return total_curtailed_power_kW
 # ----------------------------------- #
 # ----- STACK - LEVEL EQUATIONS ----- #
 # ----------------------------------- #
-    def run_stack(self,T_stack,I_stack):
-        cluster_status = self.calc_cluster_status(I_stack)
-        stack_h2_production_rate = self.cell_H2_production_rate(T_stack,I_stack)*self.n_cells
-        pass
+    # def run_stack(self,T_stack,I_stack):
+    #     cluster_status = self.calc_cluster_status(I_stack)
+    #     stack_h2_production_rate = self.cell_H2_production_rate(T_stack,I_stack)*self.n_cells
+    #     pass
     def create_power_current_curve(self,T_stack):
         #NOTE: should this be moved to higher level (like AlkalineSupervisor?)
         #TODO: add in curve error
@@ -386,6 +434,14 @@ class ALK_Clusters:
         df_dbg=pd.DataFrame({'T [C]':temps_C,'I [A]':currents,'V_cell':cell_voltage,"J [A/cm^2]":current_density,'Power [kW/cell]':powers}) #added
         df_dbg2 = df_dbg[df_dbg["T [C]"]==T_stack]
 
+        i_actual = df['Current'][temp_oi_idx].values
+        i_estimated = stack_power_to_current((df['Power'][temp_oi_idx].values,df['Temp'][temp_oi_idx].values),*curve_coeff)
+        i_error = i_actual - i_estimated
+        V_actual = self.cell_design(T_stack,i_actual)
+        V_estimated = self.cell_design(T_stack,i_estimated)
+        P_actual = i_actual*V_actual*self.n_cells*(1e-3)
+        P_estimated = i_estimated*V_estimated*self.n_cells*(1e-3)
+        P_error = P_actual - P_estimated
         return curve_coeff
     def stack_degraded_current(self,I_stack,V_init,V_deg):
         """1 liner desc
@@ -443,9 +499,43 @@ class ALK_Clusters:
         self.m = molality  # NOTE: THIS HAS BEEN VALIDATED
         self.M = molarity  # NOTE: THIS HAS BEEN VALIDATED
 
+        self.feedstock_usage()
         return molality,molarity
     
-    
+
+    def feedstock_usage(self):
+        #TODO: finish this based on percent weight formula and half-cell reaction equations
+        H2_production_kg = 1
+        #solvent is water
+        #solute is KOH
+        # molality is self.m #mol KOH / kg H2O
+        #cathode: 2H2O + 2e- -> H2 + 2OH-
+        #anode: 4OH- -> O2 + 2*H2O + 4e-
+        #https://pubs.acs.org/doi/10.1021/acs.accounts.3c00709#:~:text=Alkaline%20Water%20Electrolysis%20(AWE),-ARTICLE%20SECTIONS&text=Electrochemical%20water%20splitting%20consists%20of,oxygen%20evolution%20reaction%20(OER).
+        #^ section 2.1
+        #https://doi.org/10.1016/j.rser.2015.08.044
+        #https://www.energy.gov/eere/fuelcells/hydrogen-production-electrolysis
+        #^ "transport of hydroxide ions (OH-) through the electrolyte from the cathode to the anode with hydrogen being generated on the cathode side"
+        liters_H2O_pr_Nm3_H2 = 1 # 1L H2O / Nm^3-H2 from water purification.
+        #11.126 Nm^3 / 1 kg H2
+        h2_production_Nm3 = H2_production_kg*11.126 #Nm^3
+        
+        liters_of_water_usage = h2_production_Nm3*liters_H2O_pr_Nm3_H2
+
+        # h2_production_mol = H2_production_kg*1e3/(self.M_H2) #mol-H2/dt
+        # water_used_for_splitting_kg = h2_production_mol*self.M_H2O/1e3 #kg-H2O
+        
+        ## cathode: 2H2O + 2e- -> H2 + 2OH-
+        
+        # 3.7g of KOH per kg H2 (unsure if ratio refers to solvent or solution)
+        # 1L H2O / Nm^3-H2 from water purification.
+        KOH_to_H2_usage = 3.7 #3.7 grams KOH per kg H2
+        KOH_grams_used = H2_production_kg*KOH_to_H2_usage
+        #11.126 Nm^3 / 1 kg H2
+
+        #OH- anions are oxidized at anode
+        self.BOL_design_info.update({"Feedstock Usage: Liters H2O/kg-H2":11.126,"Feedstock Usage: Grams KOH/kg-H2":KOH_to_H2_usage})
+
     def cell_bubble_rate_coverage(self, T_stack, I_stack):
         """_summary_
 
@@ -489,11 +579,13 @@ class ALK_Clusters:
     # ----- CELL VOLTAGE EQUATIONS ----- #
     # ---------------------------------- #
     def cell_design(self,T_stack,I_stack):
-       
+        
         V_rev = self.cell_reversible_overpotential(T_stack, self.pressure_operating)
         V_act_a, V_act_c = self.cell_activation_overpotential(T_stack, I_stack)
         V_ohm = self.cell_ohmic_overpotential(T_stack, I_stack)
         V_cell = V_rev + V_ohm + V_act_a + V_act_c  # Eqn 4
+
+        V_cell = np.nan_to_num(V_cell)
         return V_cell
 
     def cell_reversible_overpotential(self, T_stack, P):
@@ -661,13 +753,23 @@ class ALK_Clusters:
     # ----- CELL DEGRADATION EQUATIONS ----- #
     # -------------------------------------- #
     def cell_degradation(self,V_cell,cluster_status):
-        V_cell = V_cell*cluster_status
-        
-        V_deg_uptime = self.cell_steady_degradation(V_cell)
-        V_deg_onoff = self.cell_onoff_degradation(cluster_status)
-        V_fatigue = self.cell_fatigue_degradation()
+        if self.include_degradation_penalty:
 
-        V_deg = np.cumsum(V_deg_uptime) + np.cumsum(V_deg_onoff) + V_fatigue
+            V_cell = V_cell*cluster_status
+            
+            V_deg_uptime = self.cell_steady_degradation(V_cell,cluster_status)
+            V_deg_onoff = self.cell_onoff_degradation(cluster_status)
+            V_fatigue = self.cell_fatigue_degradation(V_cell)
+
+            V_deg = np.cumsum(V_deg_uptime) + np.cumsum(V_deg_onoff) + V_fatigue
+            self.simulation_results.update({"Simulation Final Steady Deg [V/cell]":np.cumsum(V_deg_uptime)[-1]})
+            self.simulation_results.update({"Simulation Final On/Off Deg [V/cell]":np.cumsum(V_deg_onoff)[-1]})
+            self.simulation_results.update({"Simulation Final Fatigue Deg [V/cell]":V_fatigue[-1]})
+        else:
+            V_deg = np.zeros(len(V_cell))
+            self.simulation_results.update({"Simulation Final Steady Deg [V/cell]":0})
+            self.simulation_results.update({"Simulation Final On/Off Deg [V/cell]":0})
+            self.simulation_results.update({"Simulation Final Fatigue Deg [V/cell]":0})
         return V_deg
 
     def cell_fatigue_degradation(self,V_cell,dt_fatigue_calc_hrs=168):
@@ -692,13 +794,14 @@ class ALK_Clusters:
                 rf_track+=rf_sum
                 V_fatigue_ts[t_calc[i]:t_calc[i+1]]=rf_track*self.rate_fatigue
 
-        
+        self.simulation_results.update({"Lifetime Fatigue Deg [V/sim]":lifetime_fatigue_deg})
         return V_fatigue_ts
 
     def cell_steady_degradation(self,V_cell,cluster_status):
         steady_deg_per_hr=self.dt*self.steady_deg_rate*V_cell*cluster_status
         # cumulative_Vdeg=np.cumsum(steady_deg_per_hr)
         # self.steady_deg_rate
+        self.simulation_results.update({"On-time/sim [hrs]":np.sum(cluster_status)*(self.dt/3600)})
         return steady_deg_per_hr
 
     def cell_onoff_degradation(self,cluster_status):
@@ -706,8 +809,9 @@ class ALK_Clusters:
         cycle_cnt = np.where(change_stack < 0, -1*change_stack, 0)
         
         cycle_cnt = np.array([0] + list(cycle_cnt))
-        self.off_cycle_cnt = cycle_cnt
+        self.off_cycle_cnt = np.sum(cycle_cnt)
         stack_off_deg_per_hr= self.onoff_deg_rate*cycle_cnt
+        self.simulation_results.update({"Off-cycles/sim":self.off_cycle_cnt})
         return stack_off_deg_per_hr
     
     
@@ -741,7 +845,7 @@ class ALK_Clusters:
     
     def stack_reverse_faradays(self,H2_required_per_stack_kg):
         I_reqd_BOL_noFaradaicLoss=(H2_required_per_stack_kg*1000*2*self.F)/(1*self.n_cells*self.dt*self.M_H2)
-        n_f=self.calc_faradaic_efficiency(I_reqd_BOL_noFaradaicLoss)
+        n_f=self.calc_faradaic_efficiency(self.T_stack,I_reqd_BOL_noFaradaicLoss)
         I_reqd=(H2_required_per_stack_kg*1000*2*self.F)/(n_f*self.n_cells*self.dt*self.M_H2)
         return I_reqd
 
