@@ -106,6 +106,7 @@ def combine_results_across_clusters(res):
     H2_Results.update({"System Design":design_summary})
 
     if "Power" in list(res["Controller Output"].keys())[0]:
+        H2_Results["Simulation Summary"]["Total Curtailed Power [kW/sim]"] += np.sum(res["Controller Output"]["Curtailed Power [kW]"])
         ts_df["Power Curtailed [kW]"] += res["Controller Output"]["Curtailed Power [kW]"]
     if "H2 Demand" in list(res["Controller Output"].keys())[0]:
         temp = pd.DataFrame(res["Controller Output"]["Curtailed H2 Demand [kg]"],columns=["Curtailed H2 Demand [kg]"])
