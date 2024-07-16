@@ -40,7 +40,8 @@ def combine_average_LTA_across_clusters(lta_df_avg):
         temp = lta_df_avg.loc[k].mean()
         temp = pd.Series(temp,index=[k])
         lta_avg = pd.concat([lta_avg,temp],axis=0)
-    lta_avg.columns = ["Average Lifetime Performance"]
+    # lta_avg.columns = ["Average Lifetime Performance"]
+    lta_avg = pd.Series(lta_avg.to_dict()[0])
     return lta_avg
 
 def combine_system_design(sys_des):
@@ -77,7 +78,8 @@ def combine_system_design(sys_des):
     
     temp = sys_des.rename(index = dict(zip(original_keys,new_keys)))["Cluster #0"]
     design_summary = pd.concat([design_summary,temp],axis=0)
-    design_summary.columns = ["System Design"]
+    # design_summary.columns = ["System Design"]
+    design_summary = pd.Series(design_summary.to_dict()[0])
     return design_summary
 
 def combine_results_across_clusters(res):
@@ -93,7 +95,8 @@ def combine_results_across_clusters(res):
         avg = res["Summary"].loc[k].mean()
         avg = pd.Series(avg,index=[k])
         sum_df = pd.concat([sum_df,avg],axis=0)
-    sum_df.columns = ["Simulation Summary"]
+    # sum_df.columns = ["Simulation Summary"]
+    sum_df = pd.Series(sum_df.to_dict()[0])
     
     H2_Results.update({"Simulation Summary":sum_df})
     

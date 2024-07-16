@@ -28,7 +28,7 @@ class AlkalineCosts:
         pass
     def add_profast_params(self,H2_Results):
         #NOTE: Assumes that dt=3600
-        nameplate_kg_pr_day = 24*H2_Results["System Design"].loc["System: BOL Rated H2 Production [kg/dt]"].to_list()[0]
+        nameplate_kg_pr_day = 24*H2_Results["System Design"].loc["System: BOL Rated H2 Production [kg/dt]"]
         if "Performance By Year" in H2_Results.keys():
             capacity_factor = dict(zip(self.years_of_operation,H2_Results["Performance By Year"]["Capacity Factor [-]"].to_list()))
         else:
@@ -55,7 +55,7 @@ class AlkalineCosts:
     def add_profast_capital_items(self,H2_Results):
         pf_capex_dict = {}
         keys = ["name","cost","depr_type","depr_period","refurb"]
-        electrolyzer_size_MW = np.round(H2_Results["System Design"].loc["System: BOL Rated Power [kW]"].to_list()[0])/1e3
+        electrolyzer_size_MW = np.round(H2_Results["System Design"].loc["System: BOL Rated Power [kW]"])/1e3
         ["Alkaline Electrolyzer System",overnight_capex,"MACRS",7,list(electrolyzer_refurbishment_schedule)]
         self.pf_dict.update({"capital_items":pf_capex_dict})
         pass
@@ -63,7 +63,7 @@ class AlkalineCosts:
         fixed_OM = [] #[$/kW-year]
         pf_fopex_dict = {}
         keys = ["name","usage","unit","cost","escalation"]
-        electrolyzer_size_MW = np.round(H2_Results["System Design"].loc["System: BOL Rated Power [kW]"].to_list()[0])/1e3
+        electrolyzer_size_MW = np.round(H2_Results["System Design"].loc["System: BOL Rated Power [kW]"])/1e3
 
         fixed_cost_electrolysis_total = fixed_OM*electrolyzer_size_MW*1e3
 
@@ -81,8 +81,8 @@ class AlkalineCosts:
             annual_variable_OM_perkg = variable_OM*elec_efficiency_per_yr_kWhprkg
             total_variable_OM_perkg = dict(zip(self.years_of_operation,annual_variable_OM_perkg))
         else:
-            h2_pr_sim = H2_Results["Simulation Summary"].loc["Total Hydrogen Production [kg/sim]"].to_list()[0]
-            power_pr_sim = H2_Results["Simulation Summary"].loc["Total Power Usage [kW/sim]"].to_list()[0]
+            h2_pr_sim = H2_Results["Simulation Summary"].loc["Total Hydrogen Production [kg/sim]"]
+            power_pr_sim = H2_Results["Simulation Summary"].loc["Total Power Usage [kW/sim]"]
             elec_efficiency_per_yr_kWhprkg = power_pr_sim/h2_pr_sim
             total_variable_OM_perkg = variable_OM*elec_efficiency_per_yr_kWhprkg
             
@@ -96,8 +96,8 @@ class AlkalineCosts:
         keys = ["name","usage","unit","cost","escalation"]
 
         liters_pr_gallon = 3.78541 #1 gal = 3.78541 L
-        gal_h2O_pr_kgH2 = H2_Results["System Design"].loc["Feedstock Usage: Liters H2O/kg-H2"].to_list()[0]/liters_pr_gallon
-        grams_KOH_pr_kgH2 = H2_Results["System Design"].loc["Feedstock Usage: Grams KOH/kg-H2"].to_list()[0]
+        gal_h2O_pr_kgH2 = H2_Results["System Design"].loc["Feedstock Usage: Liters H2O/kg-H2"]/liters_pr_gallon
+        grams_KOH_pr_kgH2 = H2_Results["System Design"].loc["Feedstock Usage: Grams KOH/kg-H2"]
         water_fds_vals = ["Water",gal_h2O_pr_kgH2,"gallon-water",water_cost_pr_gal,0]
         koh_fds_vals = ["KOH",grams_KOH_pr_kgH2,"grams-KOH",KOH_cost_pr_gram,0]
 
