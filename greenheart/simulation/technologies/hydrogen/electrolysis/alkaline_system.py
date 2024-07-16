@@ -90,7 +90,7 @@ def combine_results_across_clusters(res):
         tot = pd.Series(tot,index=[k])
         sum_df = pd.concat([sum_df,tot],axis=0)
     for k in summary_keys_average:
-        avg = res["Summary"].loc[k].sum()
+        avg = res["Summary"].loc[k].mean()
         avg = pd.Series(avg,index=[k])
         sum_df = pd.concat([sum_df,avg],axis=0)
     sum_df.columns = ["Simulation Summary"]
