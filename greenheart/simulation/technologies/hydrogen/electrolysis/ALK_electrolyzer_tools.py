@@ -4,8 +4,24 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 
-def estimate_alkaline_system_mass_footprint(electrolyzer_size_mw):
-    pass
+def estimate_alkaline_system_footprint(n_stacks):
+    #Thomas I. Valdez, ... Sebastian Freund, in Machinery and Energy Systems for the Hydrogen Economy, 2022
+    #https://www.sciencedirect.com/topics/engineering/alkaline-electrolysis
+    # 5.4.7.2: Commercial alkaline electrolysis systems
+    # 0.5 MW electrolyzer: 2.2m x 2.3 m by 3m tall
+    #Teledyne Titan EL water electrolysis system in 80 Nm3/h configuration.
+    #assuming double the volume of 0.5 MW electrolyzer and square shaped
+    ref_stack_width = 5.06 #m
+    ref_stack_length = 5.06 #m
+    ref_stack_height = 3 #m
+    #https://www.sinohyenergy.com/5mw-10mw-alkaline-water-electrolysis/
+    #1800 L H2O/hour, 2000 Nm^3-H2/hr, 1000 Nm^3 O2/hr
+    system_width = n_stacks*ref_stack_width
+    system_length = n_stacks*ref_stack_length
+    system_area = system_width*system_length
+    system_volume = system_area*ref_stack_height
+    return {"System Width [m]":system_width,"System Length [m]":system_length,"System Area [m^2]":system_area,"System Volume [m^3]":system_volume}
+
 def gibbs_temp_pressure(T_c):
     #https://webbook.nist.gov/cgi/inchi/InChI%3D1S/H2O/h1H2
     #^ shomate equatiom
