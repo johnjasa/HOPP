@@ -157,6 +157,11 @@ def run_alkaline_physics(input_signal,input_signal_type,electrolyzer_size_MW,ele
     num_clusters = int(np.ceil(electrolyzer_size_MW/cluster_size_MW))
     sup = AlkalineSupervisor(electrolyzer_size_MW,cluster_size_MW,input_signal_type,control_strategy,plant_life)
     
+    if input_signal_type == "h2":
+        if isinstance(input_signal,(float,int)):
+            input_signal = input_signal*np.ones(8760)
+    if isinstance(input_signal,list):
+        input_signal = np.array(input_signal)
     clusters = sup.create_clusters(num_clusters,cluster_size_MW,alk_config)
     res, power_consumption_total,hydrogen_production_total = sup.run(clusters,input_signal)
     H2_Results = combine_results_across_clusters(res)

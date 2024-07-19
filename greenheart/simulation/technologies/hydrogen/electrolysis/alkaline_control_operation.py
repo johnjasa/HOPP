@@ -33,6 +33,7 @@ class AlkalineSupervisor:
         average_LTA = pd.DataFrame()
         sys_design = pd.DataFrame()
 
+        #TODO: base length off of not input_signal_profile just in case the hydrogen demand is constant
         power_consumption_total = np.zeros(len(input_signal_profile))
         hydrogen_production_total = np.zeros(len(input_signal_profile))
         for ci, cluster in enumerate(clusters):
