@@ -14,7 +14,7 @@ def stack_power_to_current(P_T,p1,p2,p3,p4,p5,p6): #calculates i-v curve coeffic
     i_stack=p1*(pwr**3) + p2*(pwr**2) +  (p3*pwr) + (p4*pwr**(1/2)) + p5
     return i_stack 
 
-class ALK_Clusters:
+class PEM_Clusters:
     # num hydrogen molecules transferred per reaction
     z: int = 2 #TODO: change to z_c
     F: float = 96485.34  # Faraday's Constant (C/mol) or [As/mol]
@@ -24,7 +24,6 @@ class ALK_Clusters:
     M_H2: float = 2.016 #[g/mol]
     M_O: float = 15.999  # molecular weight of Oxygen [g/mol]
     M_O2: float = 31.999 #[g/mol]
-    M_K: float = 39.0983  # molecular weight of Potassium [g/mol]
     
     lhv: float = 33.33  # lower heating value of H2 [kWh/kg]
     hhv: float = 39.41  # higher heating value of H2 [kWh/kg]
