@@ -313,8 +313,8 @@ class PEM_Clusters:
         return power_consumed/hydrogen_produced
         
     def run_LTA_analysis(self,V_deg,V_cell_nom,I_stack_nom):
-        from greenheart.simulation.technologies.hydrogen.electrolysis.alkaline_LTA import alkaline_LTA
-        lta = alkaline_LTA(self)
+        from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_LTA import PEMLTA
+        lta = PEMLTA(self)
         if self.penalize_hydrogen_production:
             lta.annual_performance_for_degradation_applied_to_output(V_deg,V_cell_nom,I_stack_nom)
         else:
