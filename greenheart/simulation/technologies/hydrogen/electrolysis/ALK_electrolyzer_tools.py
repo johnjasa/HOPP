@@ -3,6 +3,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+def estimate_alkaline_footprint_singlitico(electrolyzer_size_MW):
+    #https://doi.org/10.1016/j.rset.2021.100005
+    footprint_m2_pr_MW = 95
+    footprint_m2 = footprint_m2_pr_MW*electrolyzer_size_MW
+    return footprint_m2
 
 def estimate_alkaline_system_footprint(n_stacks):
     #Thomas I. Valdez, ... Sebastian Freund, in Machinery and Energy Systems for the Hydrogen Economy, 2022
