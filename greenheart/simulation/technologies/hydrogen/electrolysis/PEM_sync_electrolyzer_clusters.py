@@ -509,13 +509,18 @@ class PEM_Clusters:
     def cell_reversible_overpotential(self, T_stack, P):
         # updated for PEM
         #TODO: make pressure an attribute
-        #TODO: replace Antoine formula with Arden-Buck
+       
         T_K = convert_temperature([T_stack], "C", "K")[0]
         Urev0 = self.cell_Urev0()
         panode_atm=1 #[atm] total pressure at the anode
         pcathode_atm=1 #[atm] total pressure at the cathode
         patmo_atm=1 #atmospheric prestture
-    
+        #TODO: replace Antoine formula with Arden-Buck
+        # def arden_buck_eqn(T_el_C):
+        #     p_h2O_sat_kPa = (0.61121* np.exp((18.678 - (T_el_C / 234.5)) * (T_el_C / (257.14 + T_el_C)))) # (kPa) #ARDEN-BUCK
+        #     #convert kPa to bar
+        #     p_H2O = p_h2O_sat_kPa*0.01
+        #     return p_H2O
         #coefficient for Antoine formulas
         A = 8.07131
         B = 1730.63
