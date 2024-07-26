@@ -190,6 +190,9 @@ class ALK_Clusters:
 
         self.BOL_design_info.update(dict(zip(keys,vals)))
         self.BOL_design_info.update({"n_stacks/cluster":self.n_stacks,"n_cells/stack":self.n_cells,"Minimum Stack Power [kW]":self.min_stack_power_kW})
+        self.BOL_design_info.update({"Stack Operating Temperature [C]":self.T_stack})
+        self.BOL_design_info.update({"Stack Anode Pressure [bar]":self.pressure_operating})
+        self.BOL_design_info.update({"Stack Cathode Pressure [bar]":self.pressure_operating})
         []
 # -------------------------------------------- #      
 # ----- OPERATIONAL CONSTRAINTS & LOSSES ----- #
@@ -263,8 +266,8 @@ class ALK_Clusters:
         if timeseries_result:
             if key in self.timeseries_results.keys():
                 self.timeseries_results[key]= value
-            else:
-                self.simulation_results.update({"--Total {}".format(key):sum(value)})
+            # else:
+            #     self.simulation_results.update({"--Total {}".format(key):sum(value)})
         else:
             self.simulation_results.update({key:value})
     
@@ -393,10 +396,10 @@ class ALK_Clusters:
         H2_required_per_stack_kg = H2_required_cluster_kg/self.n_stacks
         I_reqd = self.stack_reverse_faradays(H2_required_per_stack_kg)
         #Saturate current to rated
-        I_reqd = np.argwhere(I_reqd>self.nominal_current,self.nominal_current,I_reqd)
+        I_reqd = np.where(I_reqd>self.nominal_current,self.nominal_current,I_reqd)
         V_reqd = self.cell_design(self.T_stack,I_reqd)
         V_deg_est = self.estimate_cell_degradation_from_demand(H2_required_cluster_kg)
-        power_reqd_kW = (I_reqd*(V_reqd,V_deg_est)*self.n_cells*self.n_stacks)/1e3
+        power_reqd_kW = (I_reqd*(V_reqd+V_deg_est)*self.n_cells*self.n_stacks)/1e3
         return I_reqd,power_reqd_kW
         
     
@@ -709,10 +712,31 @@ class ALK_Clusters:
         ba = (R * T_anode) / (self.z * self.F * alpha_a)
         # Eqn 13 - Tafel slope for cathode
         bc = (R * T_anode) / (self.z * self.F * alpha_c)
-        # Eqn 11 - anode activation energy
-        V_act_a = ba * np.maximum(0, np.log(ja / j0a))
-        # Eqn 12 - cathode activation energy
-        V_act_c = bc * np.maximum(0, np.log(jc / j0c))
+        
+        if isinstance(I_stack,(float,int)):
+            
+            if j_eff>0:
+                # Eqn 11 - anode activation energy
+                V_act_a = ba * np.maximum(0, np.log(ja / j0a))
+                # Eqn 12 - cathode activation energy
+                V_act_c = bc * np.maximum(0, np.log(jc / j0c))
+            else:
+                V_act_a = 0
+                V_act_c = 0
+        else:
+            if any(j==0 for j in j_eff):
+                # Eqn 11 - anode activation energy
+                V_act_a = np.zeros(len(I_stack))
+                V_act_c = np.zeros(len(I_stack))
+                i_on = np.argwhere(j_eff>0)[:,0]
+                # np.log(j_eff[np.argwhere(j_eff>0)[:,0]]/j0a)
+                V_act_a[i_on] = ba * np.log(ja[i_on] / j0a)
+                # Eqn 12 - cathode activation energy
+                V_act_c[i_on] = bc * np.log(jc[i_on] / j0c)
+                # V_act_c = np.where(j_eff>0,bc * np.log(jc / j0c),0)
+            else:
+                V_act_a = ba * np.maximum(0, np.log(ja / j0a))
+                V_act_c = bc * np.maximum(0, np.log(jc / j0c))
 
         return V_act_a, V_act_c
 
@@ -811,6 +835,7 @@ class ALK_Clusters:
 
     def cell_fatigue_degradation(self,V_cell,dt_fatigue_calc_hrs=168):
         V_fatigue_ts=np.zeros(len(V_cell))
+        lifetime_fatigue_deg = 0 
         if np.max(V_cell)!=np.min(V_cell):
             
             rf_cycles = rainflow.count_cycles(V_cell, nbins=10)
@@ -915,6 +940,8 @@ class ALK_Clusters:
 if __name__ == "__main__":
     
     alk = ALK_Clusters(cluster_size_mw=1,plant_life=30)
+    from greenheart.simulation.technologies.hydrogen.electrolysis.ALK_electrolyzer_tools import get_efficiency_curve
+    df = get_efficiency_curve(alk,file_desc = "July2024")
     # from greenheart.simulation.technologies.hydrogen.electrolysis.ALK_electrolyzer_tools import plot_IV_curve
     # plot_IV_curve(alk,file_desc="7-bar")
     alk.nominal_current*alk.V_cell_nominal
