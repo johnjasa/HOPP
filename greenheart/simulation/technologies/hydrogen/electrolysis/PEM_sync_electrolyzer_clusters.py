@@ -573,7 +573,7 @@ class PEM_Clusters:
         # validated against Figure 5 of Reference
         T_K = convert_temperature([T_stack], "C", "K")[0]
         #current density [A/cm^2]
-        i = I_stack/self.cell_area 
+        i = self.calc_current_density(I_stack)
         # Anode charge transfer coefficient
         a_a = 2  
         # Cathode charge transfer coefficient
@@ -588,25 +588,23 @@ class PEM_Clusters:
 
     def cell_ohmic_overpotential(self, T_stack, I_stack):
         # updated for PEM
-        R_tot = self.cell_total_resistance(T_stack, I_stack)  # Ohms
-        i = I_stack/self.cell_area
+        R_tot = self.cell_total_resistance(T_stack)  # Ohms
+        i = self.calc_current_density(I_stack)
         V_ohm = i * R_tot  # [V/cell]
         return V_ohm
 
-    def cell_total_resistance(self, T_stack, I_stack):
+    def cell_total_resistance(self, T_stack):
         # updated for PEM
-        R_electrode = self.cell_electrode_resistance(T_stack)
-        R_membrane = self.cell_membrane_resistance(T_stack,I_stack)  # [Ohms] VERIFIED for Ohm*cm^2
+        R_electrode = self.cell_electrode_resistance()
+        R_membrane = self.cell_membrane_resistance(T_stack)  # [Ohms] VERIFIED for Ohm*cm^2
         R_tot = R_electrode + R_membrane  # Ohm*cm^2
 
         return R_tot
         
     
 
-    def cell_membrane_resistance(self, T_stack,I_stack):
+    def cell_membrane_resistance(self, T_stack):
         T_K=T_stack+ 273.15 
-        #current density [A/cm^2]
-        i = I_stack/self.cell_area
         lambda_water_content = ((-2.89556 + (0.016 * T_K)) + 1.625) / 0.1875
         # membrane proton conductivity [S/cm]
         sigma = ((0.005139 * lambda_water_content) - 0.00326) * np.exp(
@@ -695,7 +693,7 @@ class PEM_Clusters:
         f1 = 250  # [mA^2/cm^4]
         f2 = 0.996  # [-]
 
-        j = I_stack/self.cell_area  # [A/cm^2]
+        j = self.calc_current_density(I_stack)  # [A/cm^2]
         j *= 1000  # [mA/cm^2]
         #Faradaic Efficiency
         eta_F = f2 * (j**2) / (f1 + j**2)
