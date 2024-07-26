@@ -35,6 +35,7 @@ steady_h2_demand = min_h2_system + ((max_h2_system-min_h2_system)/2)
 input_signal = steady_h2_demand*np.ones(8760)
 res, power_consumption_total,hydrogen_production_total = sup.run(clusters,input_signal)
 H2_Results = combine_results_across_clusters(res)
-
+[]
 # RUN ALKALINE SYSTEM
 H2_Results,power_consumption_total,hydrogen_production_total,res = run_alkaline_physics(input_signal,input_signal_type,electrolyzer_size_MW,electrolyzer_config,return_all_results = True)
+[]
