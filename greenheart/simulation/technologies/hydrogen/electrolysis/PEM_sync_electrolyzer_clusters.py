@@ -40,8 +40,8 @@ class PEM_Clusters:
             eol_eff_percent_loss = 10,
             uptime_hours_until_eol = 77600, 
             n_cycles_until_eol = 614, #update to PEM default
-            ramp_rate_percent = 0.2, #update to PEM default
-            turndown_ratio = 10, 
+            ramp_rate_percent = 0.99, #update to PEM default
+            turndown_ratio = 0.10, 
             cold_start_delay = 600,
             anode_pressure_bar = 1.01325,
             cathode_pressure_bar = 1.01325,
