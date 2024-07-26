@@ -47,6 +47,28 @@ def gibbs_temp_pressure(T_c):
     s = a*np.log(t) + b*t + c*(t**2)/2 + d*(t**3)/3 - e/(2*(t**2)) + g
 
     pass
+def get_efficiency_curve(alk: ALK_Clusters,file_desc = "test"):
+    filepath = os.path.join(os.path.dirname(__file__),"Alkaline_Efficiency-Curve-{}.csv".format(file_desc))
+    dA = 10
+    current_range = np.arange(dA,alk.nominal_current+dA,dA) 
+    current_density = np.zeros(len(current_range))
+    V_cell = np.zeros(len(current_range))
+    H2_cell = np.zeros(len(current_range)) #kg/hr
+
+    for ii,I_stack in enumerate(current_range):
+        current_density[ii] = alk.calc_current_density(alk.T_stack, I_stack)
+        V_cell[ii] = alk.cell_design(alk.T_stack,I_stack)
+        H2_cell[ii] = alk.cell_H2_production_rate(alk.T_stack,I_stack)
+    H2_stack = H2_cell*alk.n_cells
+    Stack_Power_kW = current_range*V_cell*alk.n_cells/1e3
+    power_usage_kWh = current_range*V_cell/1e3
+    efficiency_kWh_pr_kg = power_usage_kWh/H2_cell
+    keys = ["I [A]","V_cell [V]","Stack Power [kW]","Stack H2 Production [kg/hr]","Efficiency [kWh/kg]","Load %"]
+    vals = [current_range,V_cell,Stack_Power_kW,H2_stack,efficiency_kWh_pr_kg,100*Stack_Power_kW/alk.stack_rating_kW]
+    df = pd.DataFrame(dict(zip(keys,vals)))
+    df.to_csv(filepath)
+    print("Saved efficiency curve to: {}".format(filepath))
+    return df
 def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     dA = 10
     # current_range = np.arange(alk.min_current,alk.nominal_current+dA,dA) 
