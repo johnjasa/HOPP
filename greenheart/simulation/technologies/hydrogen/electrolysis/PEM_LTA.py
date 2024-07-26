@@ -82,7 +82,7 @@ class PEMLTA:
         self.sys.LTA_results_annual['Capacity Factor [-]'] = annual_capacity_factor
         self.sys.LTA_results_annual['Refurbishment Schedule [stacks replaced/year]'] = refturb_schedule
         self.sys.LTA_results_annual['Annual H2 Production [kg/year]'] = annual_hydrogen_production_kg
-        self.sys.LTA_results_annual['Annual Energy Used [kWh/year]'] = power_consumption_kW
+        self.sys.LTA_results_annual['Annual Energy Used [kWh/year]'] = annual_power_consumption_kW
 
         
     def check_dt_timestep_life(self,l_sim:int):

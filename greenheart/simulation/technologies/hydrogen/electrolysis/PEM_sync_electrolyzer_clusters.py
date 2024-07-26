@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 import scipy
 import rainflow
 from scipy import interpolate
+from scipy.constants import atm, mmHg, bar
 from scipy.constants import R, physical_constants, convert_temperature
 
 def stack_power_to_current(P_T,p1,p2,p3,p4,p5,p6): #calculates i-v curve coefficients given the stack power and stack temp
@@ -42,6 +43,8 @@ class PEM_Clusters:
             ramp_rate_percent = 0.2, #update to PEM default
             turndown_ratio = 10, 
             cold_start_delay = 600,
+            anode_pressure_bar = 1.01325,
+            cathode_pressure_bar = 1.01325,
         ):
         """_summary_
 
@@ -83,7 +86,8 @@ class PEM_Clusters:
         
         # OPERATING CONDITIONS
         ##TODO: update pressure_operating to be PEM-specific
-        self.pressure_operating = 1 #1 # [bar] operating pressure
+        self.anode_pressure = anode_pressure_bar #[bar] operating pressure at anode
+        self.cathode_pressure = cathode_pressure_bar #[bar] operating pressure at cathode
         T_stack = 80 #Celsius
 
         # CLUSTER DESIGN PARAMETERS
@@ -117,9 +121,9 @@ class PEM_Clusters:
         self.describe_degradation_rates()
         
     
-    def reset_on_off_degradation_rate(self,n_cycles_until_eol):
-        onoff_deg_rate = self.d_eol/n_cycles_until_eol
-        return onoff_deg_rate
+    # def reset_on_off_degradation_rate(self,n_cycles_until_eol):
+    #     onoff_deg_rate = self.d_eol/n_cycles_until_eol
+    #     return onoff_deg_rate
     def reset_uptime_degradation_rate(self,uptime_hours_until_eol):
         
         steady_deg_rate = self.d_eol/(self.V_cell_nominal*uptime_hours_until_eol*3600)
@@ -169,6 +173,9 @@ class PEM_Clusters:
 
         self.BOL_design_info.update(dict(zip(keys,vals)))
         self.BOL_design_info.update({"n_stacks/cluster":self.n_stacks,"n_cells/stack":self.n_cells,"Minimum Stack Power [kW]":self.min_stack_power_kW})
+        self.BOL_design_info.update({"Stack Operating Temperature [C]":self.T_stack})
+        self.BOL_design_info.update({"Stack Anode Pressure [bar]":self.anode_pressure})
+        self.BOL_design_info.update({"Stack Cathode Pressure [bar]":self.cathode_pressure})
         []
 # -------------------------------------------- #      
 # ----- OPERATIONAL CONSTRAINTS & LOSSES ----- #
@@ -364,7 +371,7 @@ class PEM_Clusters:
         I_reqd = np.argwhere(I_reqd>self.nominal_current,self.nominal_current,I_reqd)
         V_reqd = self.cell_design(self.T_stack,I_reqd)
         V_deg_est = self.estimate_cell_degradation_from_demand(H2_required_cluster_kg)
-        power_reqd_kW = (I_reqd*(V_reqd,V_deg_est)*self.n_cells*self.n_stacks)/1e3
+        power_reqd_kW = (I_reqd*(V_reqd + V_deg_est)*self.n_cells*self.n_stacks)/1e3
         return I_reqd,power_reqd_kW
         
     
@@ -498,45 +505,62 @@ class PEM_Clusters:
     # ---------------------------------- #
     def cell_design(self,T_stack,I_stack):
         
-        V_rev = self.cell_reversible_overpotential(T_stack, self.pressure_operating)
+        V_rev = self.cell_reversible_overpotential(T_stack)
         V_act_a, V_act_c = self.cell_activation_overpotential(T_stack, I_stack)
         V_ohm = self.cell_ohmic_overpotential(T_stack, I_stack)
         V_cell = V_rev + V_ohm + V_act_a + V_act_c  # Eqn 4
 
         V_cell = np.nan_to_num(V_cell)
         return V_cell
+    def antoine_formula(self,T_stack):
+        A = 8.07131
+        B = 1730.63
+        C = 233.426
+        p_H2O_sat_mmHg = 10 ** (A - (B / (C + T_stack))) 
+        #convert mmHg to atm
+        mmHg_2_atm = mmHg/atm
+        p_H2O_sat_atm=p_H2O_sat_mmHg*mmHg_2_atm  
+        return p_H2O_sat_atm
 
-    def cell_reversible_overpotential(self, T_stack, P):
+    def arden_buck(self,T_stack):
+        p_h2O_sat_kPa = (0.61121* np.exp((18.678 - (T_stack / 234.5)) * (T_stack / (257.14 + T_stack))))
+        p_H2O_sat_atm = (p_h2O_sat_kPa*1e3)*atm
+        # p_H2O_bar = p_h2O_sat_kPa*0.01
+        return p_H2O_sat_atm
+    def cell_calc_Urev(self,T_stack):
+        #UNUSED RIGHT NOW BUT SHOULD REPLACE cell_reversible_overpotential
+        T_K = convert_temperature([T_stack], "C", "K")[0]
+        Urev0 = self.cell_Urev0()
+        p_H2O_sat_atm = self.arden_buck(T_stack)
+        p_H2O_sat_bar = p_H2O_sat_atm*(bar/atm)
+        p_H2 = self.cathode_pressure - p_H2O_sat_bar
+        p_O2 = self.anode_pressure - p_H2O_sat_bar
+        b = (p_H2*np.sqrt(p_O2))/p_H2O_sat_bar #maybe should be in Pa?
+        U_rev = Urev0 + ((self.R*T_K)/(2*self.F))*(np.log(b))
+        return U_rev
+
+
+    def cell_reversible_overpotential(self, T_stack):
         # updated for PEM
         #TODO: make pressure an attribute
        
         T_K = convert_temperature([T_stack], "C", "K")[0]
         Urev0 = self.cell_Urev0()
-        panode_atm=1 #[atm] total pressure at the anode
-        pcathode_atm=1 #[atm] total pressure at the cathode
-        patmo_atm=1 #atmospheric prestture
+        panode_atm = self.anode_pressure*(atm/bar) #[atm] total pressure at the anode
+        pcathode_atm = self.anode_pressure*(atm/bar) #[atm] total pressure at the cathode
+        #TODO: add in daltons law of partial pressures
+        patmo_atm = 1 #atmospheric pressure
         #TODO: replace Antoine formula with Arden-Buck
-        # def arden_buck_eqn(T_el_C):
-        #     p_h2O_sat_kPa = (0.61121* np.exp((18.678 - (T_el_C / 234.5)) * (T_el_C / (257.14 + T_el_C)))) # (kPa) #ARDEN-BUCK
-        #     #convert kPa to bar
-        #     p_H2O = p_h2O_sat_kPa*0.01
-        #     return p_H2O
-        #coefficient for Antoine formulas
-        A = 8.07131
-        B = 1730.63
-        C = 233.426
-        #vapor pressure of water in [mmHg] using Antoine formula
-        #valid for T<283 Kelvin
-        p_h2o_sat_mmHg = 10 ** (A - (B / (C + T_stack)))  
-        #convert mmHg to atm
-        mmHg_2_atm = 133.322/101325
-        p_h20_sat_atm=p_h2o_sat_mmHg*mmHg_2_atm  
-        U_rev = Urev0 + ((self.R*T_K)/(2*self.F))*(np.log(((panode_atm-p_h20_sat_atm)/patmo_atm)*np.sqrt((pcathode_atm-p_h20_sat_atm)/patmo_atm))) 
+        p_H2O_sat_atm = self.antoine_formula(T_stack)
+        
+        
+        U_rev = Urev0 + ((self.R*T_K)/(2*self.F))*(np.log(((panode_atm-p_H2O_sat_atm)/patmo_atm)*np.sqrt((pcathode_atm-p_H2O_sat_atm)/patmo_atm))) 
         
         return U_rev
 
     def cell_Urev0(self):
-
+        #http://dx.doi.org/10.1016/j.ijhydene.2017.03.046
+        # Urev0 = (self.gibbs / (2 * self.F)) - (0.9*1e-3)*(T_K-298)
         return self.gibbs / (2 * self.F)
     def cell_Utn(self):
         #change in enthalpy (H) over zF
@@ -621,6 +645,7 @@ class PEM_Clusters:
 
     def cell_fatigue_degradation(self,V_cell,dt_fatigue_calc_hrs=168):
         V_fatigue_ts=np.zeros(len(V_cell))
+        lifetime_fatigue_deg = 0 
         if np.max(V_cell)!=np.min(V_cell):
             
             rf_cycles = rainflow.count_cycles(V_cell, nbins=10)
