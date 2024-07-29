@@ -320,8 +320,8 @@ class PEM_Clusters:
         return power_consumed/hydrogen_produced
         
     def run_LTA_analysis(self,V_deg,V_cell_nom,I_stack_nom):
-        from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_LTA import PEMLTA
-        lta = PEMLTA(self)
+        from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_LTA import PEM_LTA
+        lta = PEM_LTA(self)
         if self.penalize_hydrogen_production:
             lta.annual_performance_for_degradation_applied_to_output(V_deg,V_cell_nom,I_stack_nom)
         else:
@@ -368,7 +368,7 @@ class PEM_Clusters:
         H2_required_per_stack_kg = H2_required_cluster_kg/self.n_stacks
         I_reqd = self.stack_reverse_faradays(H2_required_per_stack_kg)
         #Saturate current to rated
-        I_reqd = np.argwhere(I_reqd>self.nominal_current,self.nominal_current,I_reqd)
+        I_reqd = np.where(I_reqd>self.nominal_current,self.nominal_current,I_reqd)
         V_reqd = self.cell_design(self.T_stack,I_reqd)
         V_deg_est = self.estimate_cell_degradation_from_demand(H2_required_cluster_kg)
         power_reqd_kW = (I_reqd*(V_reqd + V_deg_est)*self.n_cells*self.n_stacks)/1e3
@@ -714,10 +714,12 @@ class PEM_Clusters:
         return mfr_O2
     
     def stack_reverse_faradays(self,H2_required_per_stack_kg):
+        #NOTE: Runtime warning when n_f=0
         I_reqd_BOL_noFaradaicLoss=(H2_required_per_stack_kg*1000*2*self.F)/(1*self.n_cells*self.dt*self.M_H2)
         n_f=self.calc_faradaic_efficiency(I_reqd_BOL_noFaradaicLoss)
+        # I_reqd = np.where(n_f>0,(H2_required_per_stack_kg*1000*2*self.F)/(n_f*self.n_cells*self.dt*self.M_H2),0)
         I_reqd=(H2_required_per_stack_kg*1000*2*self.F)/(n_f*self.n_cells*self.dt*self.M_H2)
-        return I_reqd
+        return np.nan_to_num(I_reqd)
 
     def estimate_cell_degradation_from_demand(self,H2_required_cluster_kg):
 

@@ -1,6 +1,6 @@
 from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_sync_electrolyzer_clusters import PEM_Clusters
 import numpy as np
-class PEMLTA:
+class PEM_LTA:
     def __init__(self,sys: PEM_Clusters):
         self.sys = sys
         self.plant_life_years = len(self.sys.LTA_results_annual.index.to_list())

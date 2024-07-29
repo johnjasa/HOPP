@@ -906,10 +906,11 @@ class ALK_Clusters:
         return mfr_O2
     
     def stack_reverse_faradays(self,H2_required_per_stack_kg):
+        #NOTE: Runtime warning when n_f=0
         I_reqd_BOL_noFaradaicLoss=(H2_required_per_stack_kg*1000*2*self.F)/(1*self.n_cells*self.dt*self.M_H2)
         n_f=self.calc_faradaic_efficiency(self.T_stack,I_reqd_BOL_noFaradaicLoss)
         I_reqd=(H2_required_per_stack_kg*1000*2*self.F)/(n_f*self.n_cells*self.dt*self.M_H2)
-        return I_reqd
+        return np.nan_to_num(I_reqd)
 
     def estimate_cell_degradation_from_demand(self,H2_required_cluster_kg):
 
