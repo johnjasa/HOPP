@@ -2,7 +2,7 @@ from greenheart.simulation.technologies.hydrogen.electrolysis.alkaline_control_o
 from greenheart.simulation.technologies.hydrogen.electrolysis.alkaline_system import run_alkaline_physics
 from greenheart.simulation.technologies.hydrogen.electrolysis.alkaline_system import combine_results_across_clusters
 import numpy as np
-import pandas as pd
+
 check_control_func = True
 check_supervisor_func = True
 

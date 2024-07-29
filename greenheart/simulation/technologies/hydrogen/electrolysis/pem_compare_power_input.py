@@ -74,3 +74,4 @@ input_signal = np.tile(power_in,n_rep)[:t_sim]
 
 new_res = run_new_pem_power_input(input_signal)
 old_res = run_old_pem_power_input(input_signal)
+[]

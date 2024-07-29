@@ -83,3 +83,4 @@ steady_h2_demand = min_h2_system + ((max_h2_system-min_h2_system)/2)
 
 new_res = run_new_pem_h2_input(steady_h2_demand)
 old_res = run_old_pem_h2_input(steady_h2_demand)
+[]
