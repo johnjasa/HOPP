@@ -1,5 +1,11 @@
 import numpy as np
 import ProFAST
+import numpy_financial as npf
+
+def adjust_dollar_year(init_cost,init_dollar_year,adj_cost_year,costing_general_inflation):
+    periods = adj_cost_year - init_dollar_year
+    adj_cost = -npf.fv(costing_general_inflation,periods,0.0,init_cost)
+    return adj_cost
 
 def update_defaults(orig_dict,new_key,new_val):
     for key, val in orig_dict.items():
