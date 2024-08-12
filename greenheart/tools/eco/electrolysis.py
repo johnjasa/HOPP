@@ -23,6 +23,9 @@ from greenheart.simulation.technologies.hydrogen.electrolysis.H2_cost_model impo
 from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_costs_Singlitico_model import (
     PEMCostsSingliticoModel,
 )
+from greenheart.simulation.technologies.hydrogen.electrolysis.custom_electrolysis_costs import (
+    calc_electrolysis_capex_fom, summarize_electrolysis_cost_and_performance
+)
 
 # from hopp.simulation.technologies.hydrogen.electrolysis.run_h2_PEM_eco import run_h2_PEM
 from greenheart.simulation.technologies.hydrogen.electrolysis.run_h2_PEM import (
@@ -33,16 +36,138 @@ from greenheart.simulation.technologies.hydrogen.electrolysis.PEM_H2_LT_electrol
 )
 
 # from electrolyzer import run_electrolyzer
-
-
-def run_electrolyzer_physics(
-    hopp_results,
-    greenheart_config,
-    wind_resource,
+def electrolyzer_plots(
+    electrolyzer_physics_results,
     design_scenario,
+    wind_resource = None,
     show_plots=False,
     save_plots=False,
     output_dir="./output/",
+    ):
+
+    N = 24 * 7 * 4
+    fig, ax = plt.subplots(3, 2, sharex=True, sharey="row")
+
+    
+
+    # plt.title("4-week running average")
+    pad = 5
+    ax[0, 0].annotate(
+        "Hourly",
+        xy=(0.5, 1),
+        xytext=(0, pad),
+        xycoords="axes fraction",
+        textcoords="offset points",
+        size="large",
+        ha="center",
+        va="baseline",
+    )
+    ax[0, 1].annotate(
+        "4-week running average",
+        xy=(0.5, 1),
+        xytext=(0, pad),
+        xycoords="axes fraction",
+        textcoords="offset points",
+        size="large",
+        ha="center",
+        va="baseline",
+    )
+    if wind_resource is not None:
+        wind_speed = [W[2] for W in wind_resource._data["data"]]
+        ax[0, 0].plot(wind_speed)
+        convolved_wind_speed = np.convolve(wind_speed, np.ones(N) / (N), mode="valid")
+        ave_x = range(N, len(convolved_wind_speed) + N)
+
+        ax[0, 1].plot(ave_x, convolved_wind_speed)
+        ax[0, 0].set(ylabel="Wind\n(m/s)", ylim=[0, 30], xlim=[0, len(wind_speed)])
+        tick_spacing = 10
+        ax[0, 0].yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
+
+    y = greenheart_config["electrolyzer"]["rating"]
+    ax[1, 0].plot(electrolyzer_physics_results["power_to_electrolyzer_kw"] * 1e-3)
+    ax[1, 0].axhline(y=y, color="r", linestyle="--", label="Nameplate Capacity")
+
+    convolved_energy_to_electrolyzer = np.convolve(
+            electrolyzer_physics_results["power_to_electrolyzer_kw"] * 1e-3, np.ones(N) / (N), mode="valid"
+        )
+
+    ax[1, 1].plot(
+        ave_x,
+        convolved_energy_to_electrolyzer,
+    )
+    ax[1, 1].axhline(y=y, color="r", linestyle="--", label="Nameplate Capacity")
+    ax[1, 0].set(
+        ylabel="Electrolyzer \nPower (MW)", ylim=[0, 500], xlim=[0, len(wind_speed)]
+    )
+    # ax[1].legend(frameon=False, loc="best")
+    tick_spacing = 200
+    ax[1, 0].yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
+    ax[1, 0].text(1000, y + 0.1 * tick_spacing, "Electrolyzer Rating", color="r")
+
+    ax[2, 0].plot(
+        electrolyzer_physics_results["H2_Results"][
+            "Hydrogen Hourly Production [kg/hr]"
+        ]
+        * 1e-3
+    )
+    convolved_hydrogen_production = np.convolve(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"]*1e-3,np.ones(N) / (N), mode="valid")
+    ax[2, 1].plot(
+        ave_x,
+        convolved_hydrogen_production,
+    )
+    tick_spacing = 2
+    ax[2, 0].set(
+        xlabel="Hour",
+        ylabel="Hydrogen\n(tonnes/hr)",
+        # ylim=[0, 7000],
+        xlim=[0, len(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"])],
+    )
+    ax[2, 0].yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
+
+    ax[2, 1].set(
+        xlabel="Hour",
+        # ylim=[0, 7000],
+        xlim=[
+            4 * 7 * 24 - 1,
+            len(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"] + 4 * 7 * 24 + 2),
+        ],
+    )
+    ax[2, 1].yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
+
+    plt.tight_layout()
+    if save_plots:
+        savepaths = [
+            output_dir + "figures/production/",
+            output_dir + "data/",
+        ]
+        for savepath in savepaths:
+            if not os.path.exists(savepath):
+                os.makedirs(savepath)
+        plt.savefig(
+            savepaths[0] + "production_overview_%i.png" % (design_scenario["id"]),
+            transparent=True,
+        )
+        pd.DataFrame.from_dict(
+            data={
+                "Hydrogen Hourly Production [kg/hr]": electrolyzer_physics_results["H2_Results"][
+                    "Hydrogen Hourly Production [kg/hr]"
+                ],
+                "Hourly Water Consumption [kg/hr]": electrolyzer_physics_results[
+                    "H2_Results"
+                ]["Water Hourly Consumption [kg/hr]"],
+            }
+        ).to_csv(savepaths[1] + "h2_flow_%i.csv" % (design_scenario["id"]))
+    if show_plots:
+        plt.show()
+
+def run_electrolyzer_physics(
+    greenheart_config,
+    input_power_profile_kW,
+    # wind_resource,
+    # design_scenario,
+    # show_plots=False,
+    # save_plots=False,
+    # output_dir="./output/",
     verbose=False,
 ):
 
@@ -69,7 +194,8 @@ def run_electrolyzer_physics(
         hydrogen_production_capacity_required_kgphr = []
         grid_connection_scenario = "off-grid"
         energy_to_electrolyzer_kw = np.asarray(
-            hopp_results["combined_hybrid_power_production_hopp"]
+            input_power_profile_kW
+            # hopp_results["combined_hybrid_power_production_hopp"]
         )
         
     n_pem_clusters = int(ceildiv(electrolyzer_size_mw, greenheart_config["electrolyzer"]["cluster_rating_MW"]))
@@ -112,6 +238,7 @@ def run_electrolyzer_physics(
     footprint_m2 = run_electrolyzer_footprint(electrolyzer_size_mw)
 
     # store results for return
+    H2_Results.update({"system capacity [kW]":electrolyzer_size_mw*1e3})
     electrolyzer_physics_results = {
         "H2_Results": H2_Results,
         "capacity_factor": H2_Results["Life: Capacity Factor"],
@@ -162,120 +289,7 @@ def run_electrolyzer_physics(
             H2_Results["Life: Capacity Factor"],
         )
 
-    if save_plots or show_plots:
-        N = 24 * 7 * 4
-        fig, ax = plt.subplots(3, 2, sharex=True, sharey="row")
 
-        wind_speed = [W[2] for W in wind_resource._data["data"]]
-
-        # plt.title("4-week running average")
-        pad = 5
-        ax[0, 0].annotate(
-            "Hourly",
-            xy=(0.5, 1),
-            xytext=(0, pad),
-            xycoords="axes fraction",
-            textcoords="offset points",
-            size="large",
-            ha="center",
-            va="baseline",
-        )
-        ax[0, 1].annotate(
-            "4-week running average",
-            xy=(0.5, 1),
-            xytext=(0, pad),
-            xycoords="axes fraction",
-            textcoords="offset points",
-            size="large",
-            ha="center",
-            va="baseline",
-        )
-
-        ax[0, 0].plot(wind_speed)
-        convolved_wind_speed = np.convolve(wind_speed, np.ones(N) / (N), mode="valid")
-        ave_x = range(N, len(convolved_wind_speed) + N)
-        
-        ax[0, 1].plot(ave_x, convolved_wind_speed)
-        ax[0, 0].set(ylabel="Wind\n(m/s)", ylim=[0, 30], xlim=[0, len(wind_speed)])
-        tick_spacing = 10
-        ax[0, 0].yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
-
-        y = greenheart_config["electrolyzer"]["rating"]
-        ax[1, 0].plot(energy_to_electrolyzer_kw * 1e-3)
-        ax[1, 0].axhline(y=y, color="r", linestyle="--", label="Nameplate Capacity")
-        
-        convolved_energy_to_electrolyzer = np.convolve(
-                energy_to_electrolyzer_kw * 1e-3, np.ones(N) / (N), mode="valid"
-            )
-        
-        ax[1, 1].plot(
-            ave_x,
-            convolved_energy_to_electrolyzer,
-        )
-        ax[1, 1].axhline(y=y, color="r", linestyle="--", label="Nameplate Capacity")
-        ax[1, 0].set(
-            ylabel="Electrolyzer \nPower (MW)", ylim=[0, 500], xlim=[0, len(wind_speed)]
-        )
-        # ax[1].legend(frameon=False, loc="best")
-        tick_spacing = 200
-        ax[1, 0].yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
-        ax[1, 0].text(1000, y + 0.1 * tick_spacing, "Electrolyzer Rating", color="r")
-
-        ax[2, 0].plot(
-            electrolyzer_physics_results["H2_Results"][
-                "Hydrogen Hourly Production [kg/hr]"
-            ]
-            * 1e-3
-        )
-        convolved_hydrogen_production = np.convolve(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"]*1e-3,np.ones(N) / (N), mode="valid")
-        ax[2, 1].plot(
-            ave_x,
-            convolved_hydrogen_production,
-        )
-        tick_spacing = 2
-        ax[2, 0].set(
-            xlabel="Hour",
-            ylabel="Hydrogen\n(tonnes/hr)",
-            # ylim=[0, 7000],
-            xlim=[0, len(H2_Results["Hydrogen Hourly Production [kg/hr]"])],
-        )
-        ax[2, 0].yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
-
-        ax[2, 1].set(
-            xlabel="Hour",
-            # ylim=[0, 7000],
-            xlim=[
-                4 * 7 * 24 - 1,
-                len(H2_Results["Hydrogen Hourly Production [kg/hr]"] + 4 * 7 * 24 + 2),
-            ],
-        )
-        ax[2, 1].yaxis.set_major_locator(ticker.MultipleLocator(tick_spacing))
-
-        plt.tight_layout()
-        if save_plots:
-            savepaths = [
-                output_dir + "figures/production/",
-                output_dir + "data/",
-            ]
-            for savepath in savepaths:
-                if not os.path.exists(savepath):
-                    os.makedirs(savepath)
-            plt.savefig(
-                savepaths[0] + "production_overview_%i.png" % (design_scenario["id"]),
-                transparent=True,
-            )
-            pd.DataFrame.from_dict(
-                data={
-                    "Hydrogen Hourly Production [kg/hr]": H2_Results[
-                        "Hydrogen Hourly Production [kg/hr]"
-                    ],
-                    "Hourly Water Consumption [kg/hr]": electrolyzer_physics_results[
-                        "H2_Results"
-                    ]["Water Hourly Consumption [kg/hr]"],
-                }
-            ).to_csv(savepaths[1] + "h2_flow_%i.csv" % (design_scenario["id"]))
-        if show_plots:
-            plt.show()
 
     return electrolyzer_physics_results
 
@@ -407,7 +421,8 @@ def run_electrolyzer_cost(
             electrolyzer_OM_cost = (
                 electrolyzer_om_cost_musd * 1e6
             )  # convert from M USD to USD
-
+        elif electrolyzer_cost_model == "custom":
+            electrolyzer_total_capital_cost,electrolyzer_OM_cost = calc_electrolysis_capex_fom(electrolyzer_physics_results,greenheart_config["electrolyzer"])
         else:
             raise (
                 ValueError(
@@ -421,7 +436,8 @@ def run_electrolyzer_cost(
         "electrolyzer_total_capital_cost": electrolyzer_total_capital_cost,
         "electrolyzer_OM_cost_annual": electrolyzer_OM_cost,
     }
-
+    elec_financial_info = summarize_electrolysis_cost_and_performance(electrolyzer_physics_results,greenheart_config["electrolyzer"])
+    electrolyzer_cost_results.update(elec_financial_info)
     # print some results if desired
     if verbose:
         print("\nHydrogen Cost Results:")
