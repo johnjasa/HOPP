@@ -68,7 +68,7 @@ def create_and_populate_profast(pf_config):
     if 'incentives' in config_keys:
         variables = pf_config['incentives']
         for i in variables:
-            pf.add_incentive(i,variables[i]["value"],variables[i]["decay"],variables[i]["sunset years"],variables[i]["tax credit"])
+            pf.add_incentive(i,variables[i]["value"],variables[i]["decay"],variables[i]["sunset_years"],variables[i]["tax_credit"])
     return pf
 
 def run_profast(pf):
