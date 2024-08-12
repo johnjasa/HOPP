@@ -377,6 +377,19 @@ def run_capex(
     else:
         wave_capex = 0.0
 
+    #wind capex
+    if "wind" in hopp_config["technologies"].keys():
+        wind_capex = hopp_results["hybrid_plant"].wind.total_installed_cost
+    
+        if wind_cost_results is not None:
+            wind_capex = wind_cost_results.total_wind_cost_no_export
+            wind_export_cost = wind_cost_results.total_used_export_system_costs
+        else:
+            wind_capex = 0.0
+            wind_export_cost = 0.0
+    else:
+            wind_capex = 0.0
+            wind_export_cost = 0.0
     # solar capex
     if "pv" in hopp_config["technologies"].keys():
         solar_capex = hopp_results["hybrid_plant"].pv.total_installed_cost
@@ -447,12 +460,14 @@ def run_capex(
 
     # store capex component breakdown
     capex_breakdown = {
-        "wind": wind_cost_results.total_wind_cost_no_export,
+        # "wind": wind_cost_results.total_wind_cost_no_export,
+        "wind": wind_capex,
         "wave": wave_capex,
         "solar": solar_capex,
         "battery": battery_capex,
         "platform": platform_costs,
-        "electrical_export_system": wind_cost_results.total_used_export_system_costs,
+        # "electrical_export_system": wind_cost_results.total_used_export_system_costs,
+        "electrical_export_system": wind_export_cost,
         "desal": desal_capex,
         "electrolyzer": electrolyzer_total_capital_cost,
         "h2_pipe_array": h2_pipe_array_results["capex"],
