@@ -457,13 +457,13 @@ def run_simulation(config: GreenHeartSimulationConfig):
 
         # run electrolyzer physics model
         electrolyzer_physics_results = he_elec.run_electrolyzer_physics(
-            hopp_results_internal,
             config.greenheart_config,
-            wind_resource,
-            design_scenario,
-            show_plots=show_plots,
-            save_plots=save_plots,
-            output_dir=output_dir,
+            input_power_profile_kW = hopp_results_internal["combined_hybrid_power_production_hopp"],
+            # wind_resource,
+            # design_scenario,
+            # show_plots=show_plots,
+            # save_plots=save_plots,
+            # output_dir=output_dir,
             verbose=verbose,
         )
 
