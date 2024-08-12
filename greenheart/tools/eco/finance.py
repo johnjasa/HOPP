@@ -733,13 +733,18 @@ def run_profast_lcoe(
         "leverage after tax nominal discount rate",
         greenheart_config["finance_parameters"]["discount_rate"],
     )
-    pf.set_params(
-        "debt equity ratio of initial financing",
-        (
-            greenheart_config["finance_parameters"]["debt_equity_split"]
-            / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
-        ),
-    )
+    if  greenheart_config["finance_parameters"]["debt_equity_split"]:
+        pf.set_params(
+            "debt equity ratio of initial financing",
+            (
+                greenheart_config["finance_parameters"]["debt_equity_split"]
+                / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
+            ),
+        )
+    else:
+        pf.set_params(
+            "debt equity ratio of initial financing",greenheart_config["finance_parameters"]["debt_equity_ratio"]
+        )
     pf.set_params("debt type", greenheart_config["finance_parameters"]["debt_type"])
     pf.set_params(
         "loan period if used", greenheart_config["finance_parameters"]["loan_period"]
@@ -850,7 +855,7 @@ def run_profast_lcoe(
         greenheart_config['finance_parameters']['costing_general_inflation'],
         greenheart_config["project_parameters"]["atb_year"]
         + round((wind_cost_results.installation_time / 12))
-        - 1992,
+        - greenheart_config["finance_parameters"]["discount_years"]["electricity_ptc"],
         0,
         incentive_dict["electricity_ptc"],
     )  # given in 1992 dollars but adjust for inflation
@@ -1011,13 +1016,19 @@ def run_profast_grid_only(
         "leverage after tax nominal discount rate",
         greenheart_config["finance_parameters"]["discount_rate"],
     )
-    pf.set_params(
-        "debt equity ratio of initial financing",
-        (
-            greenheart_config["finance_parameters"]["debt_equity_split"]
-            / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
-        ),
-    )
+    if greenheart_config["finance_parameters"]["debt_equity_split"]:
+        pf.set_params(
+            "debt equity ratio of initial financing",
+            (
+                greenheart_config["finance_parameters"]["debt_equity_split"]
+                / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
+            ),
+        )
+    else:
+        pf.set_params(
+            "debt equity ratio of initial financing",greenheart_config["finance_parameters"]["debt_equity_ratio"]
+        )
+
     pf.set_params("debt type", greenheart_config["finance_parameters"]["debt_type"])
     pf.set_params(
         "loan period if used", greenheart_config["finance_parameters"]["loan_period"]
@@ -1622,7 +1633,7 @@ def run_profast_full_plant_model(
         greenheart_config['finance_parameters']['costing_general_inflation'],
         greenheart_config["project_parameters"]["atb_year"]
         + round((wind_cost_results.installation_time / 12))
-        - 1992,
+        - greenheart_config["finance_parameters"]["discount_years"]["electricity_ptc"],
         0,
         incentive_dict["electricity_ptc"],
     )  # given in 1992 dollars but adjust for inflation
@@ -1648,7 +1659,7 @@ def run_profast_full_plant_model(
         greenheart_config['finance_parameters']['costing_general_inflation'], # use ATB year (cost inflation 2.5%) costing_general_inflation
         greenheart_config["project_parameters"]["atb_year"]
         + round((wind_cost_results.installation_time / 12))
-        - 2022,
+        - greenheart_config["finance_parameters"]["discount_years"]["h2_ptc"],
         0,
         incentive_dict["h2_ptc"],
     )
