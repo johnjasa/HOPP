@@ -69,6 +69,7 @@ class SiteInfo(BaseClass):
     solar: bool = field(default=True)
     wind: bool = field(default=True)
     wave: bool = field(default=False)
+    renewable_resource_origin: str = field(default="API", validator=contains(["API", "HPC"]))
     wind_resource_origin: str = field(default="WTK", validator=contains(["WTK", "TAP"]))
 
     # Set in post init hook
@@ -109,7 +110,8 @@ class SiteInfo(BaseClass):
             urdb_label (str): Link to `Utility Rate DataBase <https://openei.org/wiki/Utility_Rate_Database>`_ label for REopt runs.
             follow_desired_schedule (bool): Indicates if a desired schedule was provided. Defaults to False.
         """
-        set_nrel_key_dot_env()
+        if self.renewable_resource_origin=="API":
+            set_nrel_key_dot_env()
 
         data = self.data
         if 'site_boundaries' in data:
