@@ -765,6 +765,17 @@ def visualize_plant(
                 h2cx = substation_x - substation_side_length
                 h2cy = substation_y
                 h2cax = ax[ax_index_detail]
+            compressor_patch10 = patches.Rectangle(
+            (h2cx, h2cy),
+            compressor_side,
+            compressor_side,
+            color=compressor_color,
+            fill=None,
+            label="Transport Compressor*",
+            hatch="+++",
+            zorder=20,
+            )
+            h2cax.add_patch(compressor_patch10)
 
         if design_scenario["wind_location"] == "onshore":
             compressor_patch01 = patches.Rectangle(
@@ -779,17 +790,7 @@ def visualize_plant(
             )
             ax[ax_index_plant].add_patch(compressor_patch01)
 
-        compressor_patch10 = patches.Rectangle(
-            (h2cx, h2cy),
-            compressor_side,
-            compressor_side,
-            color=compressor_color,
-            fill=None,
-            label="Transport Compressor*",
-            hatch="+++",
-            zorder=20,
-        )
-        h2cax.add_patch(compressor_patch10)
+        
 
         component_areas['compressor_area_m2'] = compressor_area
 
