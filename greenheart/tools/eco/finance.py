@@ -18,7 +18,7 @@ import greenheart.tools.eco.cost_tools as cost_tools
 from greenheart.simulation.technologies.hydrogen.electrolysis.custom_electrolysis_costs import (
     summarize_electrolysis_cost_and_performance
 )
-
+from hopp.utilities.utilities import write_yaml
 
 @define
 class WindCostConfig:
@@ -655,6 +655,33 @@ def run_profast_lcoe(
 ):
     gen_inflation = greenheart_config["finance_parameters"]["profast_general_inflation"]
 
+    if "profast_config" in greenheart_config["finance_parameters"]:
+        pf_config = greenheart_config["finance_parameters"]["profast_config"]
+        analysis_start_year = pf_config["params"]["analysis start year"]
+        installation_period_months = pf_config["params"]["installation months"]
+        # pf_desc = "Using_PFConfig"
+    else:
+        # pf_desc = "Using_financeparams"
+        pf_config = {"params":{}}
+        analysis_start_year = greenheart_config["project_parameters"]["atb_year"] + 1
+        installation_period_months = wind_cost_results.installation_time
+        pf_config["params"].update({"analysis start year":analysis_start_year})
+        pf_config["params"].update({"installation months": installation_period_months})
+        pf_config["params"].update({"sales tax":greenheart_config["finance_parameters"]["sales_tax_rate"]})
+        pf_config["params"].update({"property tax and insurance":greenheart_config["finance_parameters"]["property_tax"] + 
+        greenheart_config["finance_parameters"]["property_insurance"]})
+        pf_config["params"].update({"admin expense":greenheart_config["finance_parameters"]["administrative_expense_percent_of_sales"]})
+        pf_config["params"].update({"total income tax rate": greenheart_config["finance_parameters"]["total_income_tax_rate"]})
+        pf_config["params"].update({"capital gains tax rate":greenheart_config["finance_parameters"]["capital_gains_tax_rate"]})
+        pf_config["params"].update({"debt equity ratio of initial financing":greenheart_config["finance_parameters"]["debt_equity_ratio"]})
+        pf_config["params"].update({"debt type": greenheart_config["finance_parameters"]["debt_type"]})
+        
+        pf_config["params"].update({"loan period if used": greenheart_config["finance_parameters"]["loan_period"]})
+        pf_config["params"].update({"debt interest rate":greenheart_config["finance_parameters"]["debt_interest_rate"]})
+        pf_config["params"].update({"cash onhand":greenheart_config["finance_parameters"]["cash_onhand_months"]})
+        pf_config["params"].update({"leverage after tax nominal discount rate":greenheart_config["finance_parameters"]["discount_rate"]})
+
+    pf_config["params"].update({"general inflation rate": gen_inflation})
     if (
         design_scenario["h2_storage_location"] == "onshore"
         or design_scenario["electrolyzer_location"] == "onshore"
@@ -666,103 +693,21 @@ def run_profast_lcoe(
     else:
         land_cost = 0.0
 
-    pf = ProFAST.ProFAST()
-    pf.set_params(
-        "commodity",
-        {
-            "name": "electricity",
-            "unit": "kWh",
-            "initial price": 100,
-            "escalation": gen_inflation,
-        },
-    )
-    pf.set_params(
-        "capacity",
-        np.sum(hopp_results["combined_hybrid_power_production_hopp"]) / 365.0,
-    )  # kWh/day
-    pf.set_params("maintenance", {"value": 0, "escalation": gen_inflation})
-    pf.set_params(
-        "analysis start year", greenheart_config["project_parameters"]["atb_year"] + 1
-    )
-    pf.set_params(
-        "operating life", greenheart_config["project_parameters"]["project_lifetime"]
-    )
-    pf.set_params("installation months", wind_cost_results.installation_time)
-    pf.set_params(
-        "installation cost",
-        {
-            "value": 0,
-            "depr type": "Straight line",
-            "depr period": 4,
-            "depreciable": False,
-        },
-    )
-    if land_cost > 0:
-        pf.set_params("non depr assets", land_cost)
-        pf.set_params(
-            "end of proj sale non depr assets",
-            land_cost
-            * (1 + gen_inflation)
-            ** greenheart_config["project_parameters"]["project_lifetime"],
-        )
-    pf.set_params("demand rampup", 0)
-    pf.set_params("long term utilization", 1)
-    pf.set_params("credit card fees", 0)
-    pf.set_params(
-        "sales tax", greenheart_config["finance_parameters"]["sales_tax_rate"]
-    )
-    pf.set_params("license and permit", {"value": 00, "escalation": gen_inflation})
-    pf.set_params("rent", {"value": 0, "escalation": gen_inflation})
-    pf.set_params(
-        "property tax and insurance",
-        greenheart_config["finance_parameters"]["property_tax"]
-        + greenheart_config["finance_parameters"]["property_insurance"],
-    )
-    pf.set_params(
-        "admin expense",
-        greenheart_config["finance_parameters"][
-            "administrative_expense_percent_of_sales"
-        ],
-    )
-    pf.set_params(
-        "total income tax rate",
-        greenheart_config["finance_parameters"]["total_income_tax_rate"],
-    )
-    pf.set_params(
-        "capital gains tax rate",
-        greenheart_config["finance_parameters"]["capital_gains_tax_rate"],
-    )
-    pf.set_params("sell undepreciated cap", True)
-    pf.set_params("tax losses monetized", True)
-    pf.set_params("general inflation rate", gen_inflation)
-    pf.set_params(
-        "leverage after tax nominal discount rate",
-        greenheart_config["finance_parameters"]["discount_rate"],
-    )
-    if  greenheart_config["finance_parameters"]["debt_equity_split"]:
-        pf.set_params(
-            "debt equity ratio of initial financing",
-            (
-                greenheart_config["finance_parameters"]["debt_equity_split"]
-                / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
-            ),
-        )
-    else:
-        pf.set_params(
-            "debt equity ratio of initial financing",greenheart_config["finance_parameters"]["debt_equity_ratio"]
-        )
-    pf.set_params("debt type", greenheart_config["finance_parameters"]["debt_type"])
-    pf.set_params(
-        "loan period if used", greenheart_config["finance_parameters"]["loan_period"]
-    )
-    pf.set_params(
-        "debt interest rate",
-        greenheart_config["finance_parameters"]["debt_interest_rate"],
-    )
-    pf.set_params(
-        "cash onhand", greenheart_config["finance_parameters"]["cash_onhand_months"]
-    )
+    pf_config["params"]["commodity"] = {"name": "electricity","unit": "kWh","initial price": 100,"escalation":gen_inflation}
+    pf_config["params"]["capacity"] = np.sum(hopp_results["combined_hybrid_power_production_hopp"]) / 365.0
+    pf_config["params"]["operating life"] = greenheart_config["project_parameters"]["project_lifetime"]
+    pf_config["params"]["long term utilization"] = 1  # TODO should use utilization
+    
+    pf_config["params"]["non depr assets"] = land_cost
+    pf_config["params"]["end of proj sale non depr assets"] = land_cost * (1 + gen_inflation)** greenheart_config["project_parameters"]["project_lifetime"]
 
+    pf = ProFAST.ProFAST()
+    params = pf_config['params']
+    for i in params:
+        pf.set_params(i,params[i])
+    # filename = os.path.join(output_dir,"LCOE_FullPlant_ProFASTParams_{}.yaml".format(pf_desc))
+    # write_yaml(filename,pf.vals)
+    
     # ----------------------------------- Add capital items to ProFAST ----------------
     if "wind" in capex_breakdown.keys():
         pf.add_capital_item(
@@ -938,6 +883,36 @@ def run_profast_grid_only(
     electrolyzer_cost_info = summarize_electrolysis_cost_and_performance(electrolyzer_physics_results,greenheart_config["electrolyzer"])
     gen_inflation = greenheart_config["finance_parameters"]["profast_general_inflation"]
 
+
+    if "profast_config" in greenheart_config["finance_parameters"]:
+        pf_config = greenheart_config["finance_parameters"]["profast_config"]
+        analysis_start_year = pf_config["params"]["analysis start year"]
+        installation_period_months = pf_config["params"]["installation months"]
+    else:
+        pf_config = {"params":{}}
+        analysis_start_year = greenheart_config["project_parameters"]["atb_year"] + 1
+        installation_period_months = wind_cost_results.installation_time
+        pf_config["params"].update({"analysis start year":analysis_start_year})
+        pf_config["params"].update({"installation months": installation_period_months})
+        pf_config["params"].update({"sales tax":greenheart_config["finance_parameters"]["sales_tax_rate"]})
+        pf_config["params"].update({"property tax and insurance":greenheart_config["finance_parameters"]["property_tax"] + 
+        greenheart_config["finance_parameters"]["property_insurance"]})
+        pf_config["params"].update({"admin expense":greenheart_config["finance_parameters"]["administrative_expense_percent_of_sales"]})
+        pf_config["params"].update({"total income tax rate": greenheart_config["finance_parameters"]["total_income_tax_rate"]})
+        pf_config["params"].update({"capital gains tax rate":greenheart_config["finance_parameters"]["capital_gains_tax_rate"]})
+        pf_config["params"].update({"debt equity ratio of initial financing":greenheart_config["finance_parameters"]["debt_equity_ratio"]})
+        pf_config["params"].update({"debt type": greenheart_config["finance_parameters"]["debt_type"]})
+        
+        pf_config["params"].update({"loan period if used": greenheart_config["finance_parameters"]["loan_period"]})
+        pf_config["params"].update({"debt interest rate":greenheart_config["finance_parameters"]["debt_interest_rate"]})
+        pf_config["params"].update({"cash onhand":greenheart_config["finance_parameters"]["cash_onhand_months"]})
+        pf_config["params"].update({"leverage after tax nominal discount rate":greenheart_config["finance_parameters"]["discount_rate"]})
+
+    years_of_operation = cost_tools.create_years_of_operation(greenheart_config["project_parameters"]["project_lifetime"],analysis_start_year,installation_period_months)
+    electrolyzer_cost_info = summarize_electrolysis_cost_and_performance(electrolyzer_physics_results,greenheart_config["electrolyzer"])
+    pf_config["params"].update({"general inflation rate": gen_inflation})
+    
+
     if (
         design_scenario["h2_storage_location"] == "onshore"
         or design_scenario["electrolyzer_location"] == "onshore"
@@ -949,105 +924,121 @@ def run_profast_grid_only(
     else:
         land_cost = 0.0
 
+    pf_config["params"]["commodity"] = {"name": "Hydrogen","unit": "kg","initial price": 100,"escalation":gen_inflation}
+    pf_config["params"]["capacity"] = electrolyzer_cost_info["electrolyzer_capacity_kg_pr_day"]
+    pf_config["params"]["operating life"] = greenheart_config["project_parameters"]["project_lifetime"]
+    utilization = dict(zip(years_of_operation,electrolyzer_cost_info["electrolyzer_utilization"]))
+    pf_config["params"]["long term utilization"] = utilization  # TODO should use utilization
+    
+    pf_config["params"]["non depr assets"] = land_cost
+    pf_config["params"]["end of proj sale non depr assets"] = land_cost * (1 + gen_inflation)** greenheart_config["project_parameters"]["project_lifetime"]
+    
     pf = ProFAST.ProFAST()
-    pf.set_params(
-        "commodity",
-        {
-            "name": "Hydrogen",
-            "unit": "kg",
-            "initial price": 100,
-            "escalation": gen_inflation,
-        },
-    )
-    pf.set_params(
-        "capacity",
-        electrolyzer_physics_results["H2_Results"][
-            "Life: Annual H2 production [kg/year]"
-        ]
-        / 365.0,
-    )  # kg/day
-    pf.set_params("maintenance", {"value": 0, "escalation": gen_inflation})
-    pf.set_params(
-        "analysis start year", greenheart_config["project_parameters"]["atb_year"] + 1
-    )
-    pf.set_params(
-        "operating life", greenheart_config["project_parameters"]["project_lifetime"]
-    )
-    pf.set_params(
-        "installation cost",
-        {
-            "value": 0,
-            "depr type": "Straight line",
-            "depr period": 4,
-            "depreciable": False,
-        },
-    )
-    if land_cost > 0:
-        pf.set_params("non depr assets", land_cost)
-        pf.set_params(
-            "end of proj sale non depr assets",
-            land_cost
-            * (1 + gen_inflation)
-            ** greenheart_config["project_parameters"]["project_lifetime"],
-        )
-    pf.set_params("demand rampup", 0)
-    pf.set_params("long term utilization", 1)
-    pf.set_params("credit card fees", 0)
-    pf.set_params(
-        "sales tax", greenheart_config["finance_parameters"]["sales_tax_rate"]
-    )
-    pf.set_params("license and permit", {"value": 00, "escalation": gen_inflation})
-    pf.set_params("rent", {"value": 0, "escalation": gen_inflation})
-    pf.set_params(
-        "property tax and insurance",
-        greenheart_config["finance_parameters"]["property_tax"]
-        + greenheart_config["finance_parameters"]["property_insurance"],
-    )
-    pf.set_params(
-        "admin expense",
-        greenheart_config["finance_parameters"][
-            "administrative_expense_percent_of_sales"
-        ],
-    )
-    pf.set_params(
-        "total income tax rate",
-        greenheart_config["finance_parameters"]["total_income_tax_rate"],
-    )
-    pf.set_params(
-        "capital gains tax rate",
-        greenheart_config["finance_parameters"]["capital_gains_tax_rate"],
-    )
-    pf.set_params("sell undepreciated cap", True)
-    pf.set_params("tax losses monetized", True)
-    pf.set_params("general inflation rate", gen_inflation)
-    pf.set_params(
-        "leverage after tax nominal discount rate",
-        greenheart_config["finance_parameters"]["discount_rate"],
-    )
-    if greenheart_config["finance_parameters"]["debt_equity_split"]:
-        pf.set_params(
-            "debt equity ratio of initial financing",
-            (
-                greenheart_config["finance_parameters"]["debt_equity_split"]
-                / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
-            ),
-        )
-    else:
-        pf.set_params(
-            "debt equity ratio of initial financing",greenheart_config["finance_parameters"]["debt_equity_ratio"]
-        )
+    params = pf_config['params']
+    for i in params:
+        pf.set_params(i,params[i])
 
-    pf.set_params("debt type", greenheart_config["finance_parameters"]["debt_type"])
-    pf.set_params(
-        "loan period if used", greenheart_config["finance_parameters"]["loan_period"]
-    )
-    pf.set_params(
-        "debt interest rate",
-        greenheart_config["finance_parameters"]["debt_interest_rate"],
-    )
-    pf.set_params(
-        "cash onhand", greenheart_config["finance_parameters"]["cash_onhand_months"]
-    )
+    
+
+    # pf = ProFAST.ProFAST()
+    # pf.set_params(
+    #     "commodity",
+    #     {
+    #         "name": "Hydrogen",
+    #         "unit": "kg",
+    #         "initial price": 100,
+    #         "escalation": gen_inflation,
+    #     },
+    # )
+    # pf.set_params(
+    #     "capacity",
+    #     electrolyzer_physics_results["H2_Results"][
+    #         "Life: Annual H2 production [kg/year]"
+    #     ]
+    #     / 365.0,
+    # )  # kg/day
+    # pf.set_params("maintenance", {"value": 0, "escalation": gen_inflation})
+    # pf.set_params(
+    #     "analysis start year", greenheart_config["project_parameters"]["atb_year"] + 1
+    # )
+    # pf.set_params(
+    #     "operating life", greenheart_config["project_parameters"]["project_lifetime"]
+    # )
+    # pf.set_params(
+    #     "installation cost",
+    #     {
+    #         "value": 0,
+    #         "depr type": "Straight line",
+    #         "depr period": 4,
+    #         "depreciable": False,
+    #     },
+    # )
+    # if land_cost > 0:
+    #     pf.set_params("non depr assets", land_cost)
+    #     pf.set_params(
+    #         "end of proj sale non depr assets",
+    #         land_cost
+    #         * (1 + gen_inflation)
+    #         ** greenheart_config["project_parameters"]["project_lifetime"],
+    #     )
+    # pf.set_params("demand rampup", 0)
+    # pf.set_params("long term utilization", 1)
+    # pf.set_params("credit card fees", 0)
+    # pf.set_params(
+    #     "sales tax", greenheart_config["finance_parameters"]["sales_tax_rate"]
+    # )
+    # pf.set_params("license and permit", {"value": 00, "escalation": gen_inflation})
+    # pf.set_params("rent", {"value": 0, "escalation": gen_inflation})
+    # pf.set_params(
+    #     "property tax and insurance",
+    #     greenheart_config["finance_parameters"]["property_tax"]
+    #     + greenheart_config["finance_parameters"]["property_insurance"],
+    # )
+    # pf.set_params(
+    #     "admin expense",
+    #     greenheart_config["finance_parameters"][
+    #         "administrative_expense_percent_of_sales"
+    #     ],
+    # )
+    # pf.set_params(
+    #     "total income tax rate",
+    #     greenheart_config["finance_parameters"]["total_income_tax_rate"],
+    # )
+    # pf.set_params(
+    #     "capital gains tax rate",
+    #     greenheart_config["finance_parameters"]["capital_gains_tax_rate"],
+    # )
+    # pf.set_params("sell undepreciated cap", True)
+    # pf.set_params("tax losses monetized", True)
+    # pf.set_params("general inflation rate", gen_inflation)
+    # pf.set_params(
+    #     "leverage after tax nominal discount rate",
+    #     greenheart_config["finance_parameters"]["discount_rate"],
+    # )
+    # if greenheart_config["finance_parameters"]["debt_equity_split"]:
+    #     pf.set_params(
+    #         "debt equity ratio of initial financing",
+    #         (
+    #             greenheart_config["finance_parameters"]["debt_equity_split"]
+    #             / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
+    #         ),
+    #     )
+    # else:
+    #     pf.set_params(
+    #         "debt equity ratio of initial financing",greenheart_config["finance_parameters"]["debt_equity_ratio"]
+    #     )
+
+    # pf.set_params("debt type", greenheart_config["finance_parameters"]["debt_type"])
+    # pf.set_params(
+    #     "loan period if used", greenheart_config["finance_parameters"]["loan_period"]
+    # )
+    # pf.set_params(
+    #     "debt interest rate",
+    #     greenheart_config["finance_parameters"]["debt_interest_rate"],
+    # )
+    # pf.set_params(
+    #     "cash onhand", greenheart_config["finance_parameters"]["cash_onhand_months"]
+    # )
 
     # ----------------------------------- Add capital items to ProFAST ----------------
     # pf.add_capital_item(name="Wind System",cost=capex_breakdown["wind"], depr_type=greenheart_config["finance_parameters"]["depreciation_method"], depr_period=greenheart_config["finance_parameters"]["depreciation_period"],refurb=[0])
@@ -1078,7 +1069,7 @@ def run_profast_grid_only(
         cost=capex_breakdown["electrolyzer"],
         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
         depr_period=greenheart_config["finance_parameters"][
-            "depreciation_period_electrolyzer"
+            "depreciation_period"
         ],
         refurb=list(electrolyzer_refurbishment_schedule),
     )
@@ -1088,7 +1079,7 @@ def run_profast_grid_only(
         cost=capex_breakdown["h2_storage"],
         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
         depr_period=greenheart_config["finance_parameters"][
-            "depreciation_period_electrolyzer"
+            "depreciation_period"
         ],
         refurb=[0],
     )
@@ -1207,17 +1198,44 @@ def run_profast_full_plant_model(
     save_plots=False,
     output_dir="./output/",
 ):  
+    
+    gen_inflation = greenheart_config["finance_parameters"]["profast_general_inflation"]
+
     if "profast_config" in greenheart_config["finance_parameters"]:
         pf_config = greenheart_config["finance_parameters"]["profast_config"]
         analysis_start_year = pf_config["params"]["analysis start year"]
         installation_period_months = pf_config["params"]["installation months"]
+        # pf_desc = "Using_PFConfig"
     else:
+        # pf_desc = "Using_financeparams"
+        pf_config = {"params":{}}
         analysis_start_year = greenheart_config["project_parameters"]["atb_year"] + 2
         installation_period_months = wind_cost_results.installation_time
+        pf_config["params"].update({"analysis start year":analysis_start_year})
+        pf_config["params"].update({"installation months": installation_period_months})
+        pf_config["params"].update({"sales tax":greenheart_config["finance_parameters"]["sales_tax_rate"]})
+        pf_config["params"].update({"property tax and insurance":greenheart_config["finance_parameters"]["property_tax"] + 
+        greenheart_config["finance_parameters"]["property_insurance"]})
+        pf_config["params"].update({"admin expense":greenheart_config["finance_parameters"]["administrative_expense_percent_of_sales"]})
+        pf_config["params"].update({"total income tax rate": greenheart_config["finance_parameters"]["total_income_tax_rate"]})
+        pf_config["params"].update({"capital gains tax rate":greenheart_config["finance_parameters"]["capital_gains_tax_rate"]})
+        pf_config["params"].update({"debt equity ratio of initial financing":greenheart_config["finance_parameters"]["debt_equity_ratio"]})
+        pf_config["params"].update({"debt type": greenheart_config["finance_parameters"]["debt_type"]})
+        
+        pf_config["params"].update({"loan period if used": greenheart_config["finance_parameters"]["loan_period"]})
+        pf_config["params"].update({"debt interest rate":greenheart_config["finance_parameters"]["debt_interest_rate"]})
+        pf_config["params"].update({"cash onhand":greenheart_config["finance_parameters"]["cash_onhand_months"]})
+        pf_config["params"].update({"leverage after tax nominal discount rate":greenheart_config["finance_parameters"]["discount_rate"]})
+
+        pf_config["params"].update({"installation cost":{
+            "value": 0,
+            "depr type": "Straight line",
+            "depr period": 4,
+            "depreciable": False}})
     years_of_operation = cost_tools.create_years_of_operation(greenheart_config["project_parameters"]["project_lifetime"],analysis_start_year,installation_period_months)
     electrolyzer_cost_info = summarize_electrolysis_cost_and_performance(electrolyzer_physics_results,greenheart_config["electrolyzer"])
+    pf_config["params"].update({"general inflation rate": gen_inflation})
     
-    gen_inflation = greenheart_config["finance_parameters"]["profast_general_inflation"]
 
     if (
         design_scenario["h2_storage_location"] == "onshore"
@@ -1230,111 +1248,23 @@ def run_profast_full_plant_model(
     else:
         land_cost = 0.0
 
-    pf = ProFAST.ProFAST()
-    pf.set_params(
-        "commodity",
-        {
-            "name": "Hydrogen",
-            "unit": "kg",
-            "initial price": 100,
-            "escalation": gen_inflation,
-        },
-    )
-    pf.set_params(
-        "capacity",
-        electrolyzer_cost_info["electrolyzer_capacity_kg_pr_day"]
-    )  # kg/day
-
-    pf.set_params("maintenance", {"value": 0, "escalation": gen_inflation})
-    pf.set_params(
-        "analysis start year",
-        analysis_start_year,  # Add financial analysis start year
-    )
-    pf.set_params(
-        "operating life", greenheart_config["project_parameters"]["project_lifetime"]
-    )
-    pf.set_params(
-        "installation months",
-        installation_period_months,  # Add installation time to yaml default=0
-    )
-    pf.set_params(
-        "installation cost",
-        {
-            "value": 0,
-            "depr type": "Straight line",
-            "depr period": 4,
-            "depreciable": False,
-        },
-    )
-    if land_cost > 0:
-        pf.set_params("non depr assets", land_cost)
-        pf.set_params(
-            "end of proj sale non depr assets",
-            land_cost
-            * (1 + gen_inflation)
-            ** greenheart_config["project_parameters"]["project_lifetime"],
-        )
-    pf.set_params("demand rampup", 0)
+    pf_config["params"]["commodity"] = {"name": "Hydrogen","unit": "kg","initial price": 100,"escalation":gen_inflation}
+    pf_config["params"]["capacity"] = electrolyzer_cost_info["electrolyzer_capacity_kg_pr_day"]
+    pf_config["params"]["operating life"] = greenheart_config["project_parameters"]["project_lifetime"]
     utilization = dict(zip(years_of_operation,electrolyzer_cost_info["electrolyzer_utilization"]))
-    pf.set_params("long term utilization", utilization)  # TODO should use utilization
-    pf.set_params("credit card fees", 0)
-    pf.set_params(
-        "sales tax", greenheart_config["finance_parameters"]["sales_tax_rate"]
-    )
-    pf.set_params("license and permit", {"value": 00, "escalation": gen_inflation})
-    pf.set_params("rent", {"value": 0, "escalation": gen_inflation})
-    # TODO how to handle property tax and insurance for fully offshore?
-    pf.set_params(
-        "property tax and insurance",
-        greenheart_config["finance_parameters"]["property_tax"]
-        + greenheart_config["finance_parameters"]["property_insurance"],
-    )
-    pf.set_params(
-        "admin expense",
-        greenheart_config["finance_parameters"][
-            "administrative_expense_percent_of_sales"
-        ],
-    )
-    pf.set_params(
-        "total income tax rate",
-        greenheart_config["finance_parameters"]["total_income_tax_rate"],
-    )
-    pf.set_params(
-        "capital gains tax rate",
-        greenheart_config["finance_parameters"]["capital_gains_tax_rate"],
-    )
-    pf.set_params("sell undepreciated cap", True)
-    pf.set_params("tax losses monetized", True)
-    pf.set_params("general inflation rate", gen_inflation)
-    pf.set_params(
-        "leverage after tax nominal discount rate",
-        greenheart_config["finance_parameters"]["discount_rate"],
-    )
-    if greenheart_config["finance_parameters"]["debt_equity_split"]:
-        pf.set_params(
-            "debt equity ratio of initial financing",
-            (
-                greenheart_config["finance_parameters"]["debt_equity_split"]
-                / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
-            ),
-        )  # TODO this may not be put in right
-    elif greenheart_config["finance_parameters"]["debt_equity_ratio"]:
-        pf.set_params(
-            "debt equity ratio of initial financing",
-            (greenheart_config["finance_parameters"]["debt_equity_ratio"]),
-        )  # TODO this may not be put in right
-    pf.set_params("debt type", greenheart_config["finance_parameters"]["debt_type"])
-    pf.set_params(
-        "loan period if used", greenheart_config["finance_parameters"]["loan_period"]
-    )
-    pf.set_params(
-        "debt interest rate",
-        greenheart_config["finance_parameters"]["debt_interest_rate"],
-    )
-    pf.set_params(
-        "cash onhand", greenheart_config["finance_parameters"]["cash_onhand_months"]
-    )
-
+    pf_config["params"]["long term utilization"] = utilization  # TODO should use utilization
+    
+    pf_config["params"]["non depr assets"] = land_cost
+    pf_config["params"]["end of proj sale non depr assets"] = land_cost * (1 + gen_inflation)** greenheart_config["project_parameters"]["project_lifetime"]
+    
+    pf = ProFAST.ProFAST()
+    params = pf_config['params']
+    for i in params:
+        pf.set_params(i,params[i])
+    
+    # filename = os.path.join(output_dir,"LCOH_FullPlant_ProFASTParams_{}.yaml".format(pf_desc))
+    # write_yaml(filename,pf.vals)
+    
     # ----------------------------------- Add capital and fixed items to ProFAST ----------------
     if "wind" in capex_breakdown.keys():
         pf.add_capital_item(
@@ -1450,7 +1380,7 @@ def run_profast_full_plant_model(
         cost=capex_breakdown["electrolyzer"],
         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
         depr_period=greenheart_config["finance_parameters"][
-            "depreciation_period_electrolyzer"
+            "depreciation_period"
         ],
         refurb=electrolyzer_cost_info["refurb_cost_simple"],
     )
@@ -1482,7 +1412,7 @@ def run_profast_full_plant_model(
             cost=capex_breakdown["h2_pipe_array"],
             depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
             depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period_electrolyzer"
+                "depreciation_period"
             ],
             refurb=[0],
         )
@@ -1510,7 +1440,7 @@ def run_profast_full_plant_model(
             cost=capex_breakdown["h2_transport_compressor"],
             depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
             depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period_electrolyzer"
+                "depreciation_period"
             ],
             refurb=[0],
         )
@@ -1519,7 +1449,7 @@ def run_profast_full_plant_model(
             cost=capex_breakdown["h2_transport_pipeline"],
             depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
             depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period_electrolyzer"
+                "depreciation_period"
             ],
             refurb=[0],
         )
@@ -1545,7 +1475,7 @@ def run_profast_full_plant_model(
             cost=capex_breakdown["h2_storage"],
             depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
             depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period_electrolyzer"
+                "depreciation_period"
             ],
             refurb=[0],
         )
@@ -1573,7 +1503,7 @@ def run_profast_full_plant_model(
             cost=capex_breakdown["desal"],
             depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
             depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period_electrolyzer"
+                "depreciation_period"
             ],
             refurb=[0],
         )
