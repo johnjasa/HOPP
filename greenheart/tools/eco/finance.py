@@ -1179,29 +1179,25 @@ def run_profast_full_plant_model(
     ]
 
     # add wind_itc (% of wind capex)
-    electricity_itc_value_percent_wind_capex = incentive_dict["electricity_itc"]
-    electricity_itc_value_dollars = electricity_itc_value_percent_wind_capex * (
-        capex_breakdown["wind"] + capex_breakdown["electrical_export_system"]
-    )
-    pf.set_params(
-        "one time cap inct",
-        {
-            "value": electricity_itc_value_dollars,
-            "depr type": depr_type,
-            "depr period": depr_period,
-            "depreciable": True,
-        },
-    )
-
+    electricity_itc_value_dollars = 0
+    electricity_itc_value_percent_re_capex = incentive_dict["electricity_itc"]
+    if electricity_itc_value_percent_re_capex>0:
+        renewables_for_incentives = ["wind","solar","wave","electrical_export_system"]
+        for item in capex_breakdown.keys():
+            if any(i in item for i in renewables_for_incentives):
+                electricity_itc_value_dollars += electricity_itc_value_percent_re_capex*capex_breakdown[item]
+    
     # add h2_storage_itc (% of h2 storage capex)
     itc_value_percent_h2_store_capex = incentive_dict["h2_storage_itc"]
-    electricity_itc_value_dollars_h2_store = itc_value_percent_h2_store_capex * (
+    itc_value_dollars_h2_storage = itc_value_percent_h2_store_capex * (
         capex_breakdown["h2_storage"]
     )
+    total_itc_value = itc_value_dollars_h2_storage + electricity_itc_value_dollars
+    
     pf.set_params(
         "one time cap inct",
         {
-            "value": electricity_itc_value_dollars_h2_store,
+            "value": total_itc_value,
             "depr type": depr_type,
             "depr period": depr_period,
             "depreciable": True,
