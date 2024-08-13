@@ -511,7 +511,23 @@ def run_simulation(config: GreenHeartSimulationConfig):
                 design_scenario,
                 verbose=verbose,
             )
-        if design_scenario["wind_location"] == "onshore":
+        
+        elif (design_scenario["wind_location"] == "onshore") and (design_scenario["transportation"] == "pipeline"):
+            orb_config = {"site":{"distance_to_landfall":greenheart_config["site"]["distance_to_storage_km"]}}
+            h2_transport_pipe_results = he_h2.run_h2_transport_pipe(
+            orb_config,
+            greenheart_config,
+            electrolyzer_physics_results,
+            design_scenario,
+            verbose=verbose,
+        )
+
+        elif (design_scenario["wind_location"] == "onshore") and (design_scenario["transportation"] != "pipeline"):
+            h2_transport_pipe_results = {
+                "total capital cost [$]": [0 * 5433290.0184895478],
+                "annual operating cost [$]": [0.0],
+            }
+        else:
             h2_transport_pipe_results = {
                 "total capital cost [$]": [0 * 5433290.0184895478],
                 "annual operating cost [$]": [0.0],
