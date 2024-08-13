@@ -709,53 +709,70 @@ def run_profast_lcoe(
     # write_yaml(filename,pf.vals)
     
     # ----------------------------------- Add capital items to ProFAST ----------------
-    if "wind" in capex_breakdown.keys():
-        pf.add_capital_item(
-            name="Wind System",
-            cost=capex_breakdown["wind"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
-    if "wave" in capex_breakdown.keys():
-        pf.add_capital_item(
-            name="Wave System",
-            cost=capex_breakdown["wave"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
+    # if "wind" in capex_breakdown.keys():
+    #     pf.add_capital_item(
+    #         name="Wind System",
+    #         cost=capex_breakdown["wind"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
+    # if "wave" in capex_breakdown.keys():
+    #     pf.add_capital_item(
+    #         name="Wave System",
+    #         cost=capex_breakdown["wave"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
 
-    if "solar" in capex_breakdown.keys():
-        pf.add_capital_item(
-            name="Solar System",
-            cost=capex_breakdown["solar"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
+    # if "solar" in capex_breakdown.keys():
+    #     pf.add_capital_item(
+    #         name="Solar System",
+    #         cost=capex_breakdown["solar"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
 
-    if "battery" in capex_breakdown.keys():
-        pf.add_capital_item(
-            name="Battery System",
-            cost=capex_breakdown["battery"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
+    # if "battery" in capex_breakdown.keys():
+    #     pf.add_capital_item(
+    #         name="Battery System",
+    #         cost=capex_breakdown["battery"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
+
+    lcoe_capex_components = ["battery","solar","wind","wave"]
 
     if design_scenario["transportation"] == "hvdc+pipeline" or not (
         design_scenario["electrolyzer_location"] == "turbine"
         and design_scenario["h2_storage_location"] == "turbine"
     ):
-        pf.add_capital_item(
-            name="Electrical Export system",
-            cost=capex_breakdown["electrical_export_system"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
+        lcoe_capex_components += ["electrical_export_system"]
+        # pf.add_capital_item(
+        #     name="Electrical Export system",
+        #     cost=capex_breakdown["electrical_export_system"],
+        #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+        #     depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+        #     refurb=[0],
+        # )
+    depr_type=greenheart_config["finance_parameters"]["depreciation_method"]
+    depr_period=greenheart_config["finance_parameters"]["depreciation_period"]
+    capital_items = {}
+    for item in lcoe_capex_components:
+        if capex_breakdown[item]>0:
 
+            capital_item = cost_tools.make_profast_capital_item(capex_breakdown[item],item,refurb=[0])
+            capital_items.update(capital_item)
+    capital_items = pf_tools.update_defaults(capital_items,'depr_type',depr_type)
+    capital_items = pf_tools.update_defaults(capital_items,"depr_period",depr_period)
+    
+    pf_config["capital_items"] = capital_items
+    variables = pf_config['capital_items']
+    for i in variables:
+        pf.add_capital_item(i,variables[i]["cost"],variables[i]["depr_type"],variables[i]["depr_period"],variables[i]["refurb"])
     # -------------------------------------- Add fixed costs--------------------------------
     pf.add_fixed_cost(
         name="Wind and Electrical Fixed O&M Cost",
@@ -805,7 +822,7 @@ def run_profast_lcoe(
     wind_ptc_in_dollars_per_kw = -npf.fv(
         greenheart_config['finance_parameters']['costing_general_inflation'],
         greenheart_config["project_parameters"]["atb_year"]
-        + round((wind_cost_results.installation_time / 12))
+        + round((installation_period_months / 12))
         - greenheart_config["finance_parameters"]["discount_years"]["electricity_ptc"],
         0,
         incentive_dict["electricity_ptc"],
@@ -938,117 +955,6 @@ def run_profast_grid_only(
     for i in params:
         pf.set_params(i,params[i])
 
-    
-
-    # pf = ProFAST.ProFAST()
-    # pf.set_params(
-    #     "commodity",
-    #     {
-    #         "name": "Hydrogen",
-    #         "unit": "kg",
-    #         "initial price": 100,
-    #         "escalation": gen_inflation,
-    #     },
-    # )
-    # pf.set_params(
-    #     "capacity",
-    #     electrolyzer_physics_results["H2_Results"][
-    #         "Life: Annual H2 production [kg/year]"
-    #     ]
-    #     / 365.0,
-    # )  # kg/day
-    # pf.set_params("maintenance", {"value": 0, "escalation": gen_inflation})
-    # pf.set_params(
-    #     "analysis start year", greenheart_config["project_parameters"]["atb_year"] + 1
-    # )
-    # pf.set_params(
-    #     "operating life", greenheart_config["project_parameters"]["project_lifetime"]
-    # )
-    # pf.set_params(
-    #     "installation cost",
-    #     {
-    #         "value": 0,
-    #         "depr type": "Straight line",
-    #         "depr period": 4,
-    #         "depreciable": False,
-    #     },
-    # )
-    # if land_cost > 0:
-    #     pf.set_params("non depr assets", land_cost)
-    #     pf.set_params(
-    #         "end of proj sale non depr assets",
-    #         land_cost
-    #         * (1 + gen_inflation)
-    #         ** greenheart_config["project_parameters"]["project_lifetime"],
-    #     )
-    # pf.set_params("demand rampup", 0)
-    # pf.set_params("long term utilization", 1)
-    # pf.set_params("credit card fees", 0)
-    # pf.set_params(
-    #     "sales tax", greenheart_config["finance_parameters"]["sales_tax_rate"]
-    # )
-    # pf.set_params("license and permit", {"value": 00, "escalation": gen_inflation})
-    # pf.set_params("rent", {"value": 0, "escalation": gen_inflation})
-    # pf.set_params(
-    #     "property tax and insurance",
-    #     greenheart_config["finance_parameters"]["property_tax"]
-    #     + greenheart_config["finance_parameters"]["property_insurance"],
-    # )
-    # pf.set_params(
-    #     "admin expense",
-    #     greenheart_config["finance_parameters"][
-    #         "administrative_expense_percent_of_sales"
-    #     ],
-    # )
-    # pf.set_params(
-    #     "total income tax rate",
-    #     greenheart_config["finance_parameters"]["total_income_tax_rate"],
-    # )
-    # pf.set_params(
-    #     "capital gains tax rate",
-    #     greenheart_config["finance_parameters"]["capital_gains_tax_rate"],
-    # )
-    # pf.set_params("sell undepreciated cap", True)
-    # pf.set_params("tax losses monetized", True)
-    # pf.set_params("general inflation rate", gen_inflation)
-    # pf.set_params(
-    #     "leverage after tax nominal discount rate",
-    #     greenheart_config["finance_parameters"]["discount_rate"],
-    # )
-    # if greenheart_config["finance_parameters"]["debt_equity_split"]:
-    #     pf.set_params(
-    #         "debt equity ratio of initial financing",
-    #         (
-    #             greenheart_config["finance_parameters"]["debt_equity_split"]
-    #             / (100 - greenheart_config["finance_parameters"]["debt_equity_split"])
-    #         ),
-    #     )
-    # else:
-    #     pf.set_params(
-    #         "debt equity ratio of initial financing",greenheart_config["finance_parameters"]["debt_equity_ratio"]
-    #     )
-
-    # pf.set_params("debt type", greenheart_config["finance_parameters"]["debt_type"])
-    # pf.set_params(
-    #     "loan period if used", greenheart_config["finance_parameters"]["loan_period"]
-    # )
-    # pf.set_params(
-    #     "debt interest rate",
-    #     greenheart_config["finance_parameters"]["debt_interest_rate"],
-    # )
-    # pf.set_params(
-    #     "cash onhand", greenheart_config["finance_parameters"]["cash_onhand_months"]
-    # )
-
-    # ----------------------------------- Add capital items to ProFAST ----------------
-    # pf.add_capital_item(name="Wind System",cost=capex_breakdown["wind"], depr_type=greenheart_config["finance_parameters"]["depreciation_method"], depr_period=greenheart_config["finance_parameters"]["depreciation_period"],refurb=[0])
-    # pf.add_capital_item(
-    #     name="Electrical Export system",
-    #     cost=capex_breakdown["electrical_export_system"],
-    #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-    #     depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-    #     refurb=[0],
-    # )
 
     electrolyzer_refurbishment_schedule = np.zeros(
         greenheart_config["project_parameters"]["project_lifetime"]
@@ -1266,48 +1172,48 @@ def run_profast_full_plant_model(
     # write_yaml(filename,pf.vals)
     
     # ----------------------------------- Add capital and fixed items to ProFAST ----------------
-    if "wind" in capex_breakdown.keys():
-        pf.add_capital_item(
-            name="Wind System",
-            cost=capex_breakdown["wind"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
-    if "wave" in capex_breakdown.keys():
-        pf.add_capital_item(
-            name="Wave System",
-            cost=capex_breakdown["wave"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
-    if "solar" in capex_breakdown.keys():
-        pf.add_capital_item(
-            name="Solar System",
-            cost=capex_breakdown["solar"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
+    # if "wind" in capex_breakdown.keys():
+    #     pf.add_capital_item(
+    #         name="Wind System",
+    #         cost=capex_breakdown["wind"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
+    # if "wave" in capex_breakdown.keys():
+    #     pf.add_capital_item(
+    #         name="Wave System",
+    #         cost=capex_breakdown["wave"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
+    # if "solar" in capex_breakdown.keys():
+    #     pf.add_capital_item(
+    #         name="Solar System",
+    #         cost=capex_breakdown["solar"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
 
-    if "battery" in capex_breakdown.keys():
-        pf.add_capital_item(
-            name="Battery System",
-            cost=capex_breakdown["battery"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
+    # if "battery" in capex_breakdown.keys():
+    #     pf.add_capital_item(
+    #         name="Battery System",
+    #         cost=capex_breakdown["battery"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
 
     if "platform" in capex_breakdown.keys() and capex_breakdown["platform"] > 0:
-        pf.add_capital_item(
-            name="Equipment Platform",
-            cost=capex_breakdown["platform"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
+        # pf.add_capital_item(
+        #     name="Equipment Platform",
+        #     cost=capex_breakdown["platform"],
+        #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+        #     depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+        #     refurb=[0],
+        # )
         pf.add_fixed_cost(
             name="Equipment Platform O&M Cost",
             usage=1.0,
@@ -1350,17 +1256,17 @@ def run_profast_full_plant_model(
             escalation=gen_inflation,
         )
 
-    if design_scenario["transportation"] == "hvdc+pipeline" or not (
-        design_scenario["electrolyzer_location"] == "turbine"
-        and design_scenario["h2_storage_location"] == "turbine"
-    ):
-        pf.add_capital_item(
-            name="Electrical Export system",
-            cost=capex_breakdown["electrical_export_system"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
-            refurb=[0],
-        )
+    # if design_scenario["transportation"] == "hvdc+pipeline" or not (
+    #     design_scenario["electrolyzer_location"] == "turbine"
+    #     and design_scenario["h2_storage_location"] == "turbine"
+    # ):
+    #     pf.add_capital_item(
+    #         name="Electrical Export system",
+    #         cost=capex_breakdown["electrical_export_system"],
+    #         depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #         depr_period=greenheart_config["finance_parameters"]["depreciation_period"],
+    #         refurb=[0],
+    #     )
         # TODO assess if this makes sense (electrical export O&M included in wind O&M)
 
     # electrolyzer_refurbishment_schedule = np.zeros(
@@ -1374,16 +1280,36 @@ def run_profast_full_plant_model(
     #         "project_lifetime"
     #     ] : refurb_period
     # ] = greenheart_config["electrolyzer"]["replacement_cost_percent"]
+    depr_type=greenheart_config["finance_parameters"]["depreciation_method"]
+    depr_period=greenheart_config["finance_parameters"]["depreciation_period"]
+    capital_items = {}
+    for item in capex_breakdown.keys():
+        if capex_breakdown[item]>0:
+            if item == "electrolyzer":
+                refurb = electrolyzer_cost_info["refurb_cost_simple"]
+            else:
+                refurb = [0]
+            capital_item = cost_tools.make_profast_capital_item(capex_breakdown[item],item,refurb=refurb)
+            capital_items.update(capital_item)
+    capital_items = pf_tools.update_defaults(capital_items,'depr_type',depr_type)
+    capital_items = pf_tools.update_defaults(capital_items,"depr_period",depr_period)
+    
+    pf_config["capital_items"] = capital_items
 
-    pf.add_capital_item(
-        name="Electrolysis System",
-        cost=capex_breakdown["electrolyzer"],
-        depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-        depr_period=greenheart_config["finance_parameters"][
-            "depreciation_period"
-        ],
-        refurb=electrolyzer_cost_info["refurb_cost_simple"],
-    )
+    # config_keys = list(pf_config.keys())
+    # if 'capital_items' in config_keys:
+    variables = pf_config['capital_items']
+    for i in variables:
+        pf.add_capital_item(i,variables[i]["cost"],variables[i]["depr_type"],variables[i]["depr_period"],variables[i]["refurb"])
+    # pf.add_capital_item(
+    #     name="Electrolysis System",
+    #     cost=capex_breakdown["electrolyzer"],
+    #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+    #     depr_period=greenheart_config["finance_parameters"][
+    #         "depreciation_period"
+    #     ],
+    #     refurb=electrolyzer_cost_info["refurb_cost_simple"],
+    # )
     pf.add_fixed_cost(
         name="Electrolysis System Fixed O&M Cost",
         usage=1.0,
@@ -1407,15 +1333,15 @@ def run_profast_full_plant_model(
         )
 
     if design_scenario["electrolyzer_location"] == "turbine":
-        pf.add_capital_item(
-            name="H2 Pipe Array System",
-            cost=capex_breakdown["h2_pipe_array"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period"
-            ],
-            refurb=[0],
-        )
+        # pf.add_capital_item(
+        #     name="H2 Pipe Array System",
+        #     cost=capex_breakdown["h2_pipe_array"],
+        #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+        #     depr_period=greenheart_config["finance_parameters"][
+        #         "depreciation_period"
+        #     ],
+        #     refurb=[0],
+        # )
         pf.add_fixed_cost(
             name="H2 Pipe Array Fixed O&M Cost",
             usage=1.0,
@@ -1435,24 +1361,24 @@ def run_profast_full_plant_model(
         )
         or (design_scenario["transportation"] == "hvdc+pipeline")
     ):
-        pf.add_capital_item(
-            name="H2 Transport Compressor System",
-            cost=capex_breakdown["h2_transport_compressor"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period"
-            ],
-            refurb=[0],
-        )
-        pf.add_capital_item(
-            name="H2 Transport Pipeline System",
-            cost=capex_breakdown["h2_transport_pipeline"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period"
-            ],
-            refurb=[0],
-        )
+        # pf.add_capital_item(
+        #     name="H2 Transport Compressor System",
+        #     cost=capex_breakdown["h2_transport_compressor"],
+        #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+        #     depr_period=greenheart_config["finance_parameters"][
+        #         "depreciation_period"
+        #     ],
+        #     refurb=[0],
+        # )
+        # pf.add_capital_item(
+        #     name="H2 Transport Pipeline System",
+        #     cost=capex_breakdown["h2_transport_pipeline"],
+        #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+        #     depr_period=greenheart_config["finance_parameters"][
+        #         "depreciation_period"
+        #     ],
+        #     refurb=[0],
+        # )
 
         pf.add_fixed_cost(
             name="H2 Transport Compression Fixed O&M Cost",
@@ -1470,15 +1396,15 @@ def run_profast_full_plant_model(
         )
 
     if greenheart_config["h2_storage"]["type"] != "none":
-        pf.add_capital_item(
-            name="Hydrogen Storage System",
-            cost=capex_breakdown["h2_storage"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period"
-            ],
-            refurb=[0],
-        )
+        # pf.add_capital_item(
+        #     name="Hydrogen Storage System",
+        #     cost=capex_breakdown["h2_storage"],
+        #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+        #     depr_period=greenheart_config["finance_parameters"][
+        #         "depreciation_period"
+        #     ],
+        #     refurb=[0],
+        # )
         pf.add_fixed_cost(
             name="Hydrogen Storage Fixed O&M Cost",
             usage=1.0,
@@ -1498,15 +1424,15 @@ def run_profast_full_plant_model(
             escalation=gen_inflation,
         )
     else:
-        pf.add_capital_item(
-            name="Desal System",
-            cost=capex_breakdown["desal"],
-            depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
-            depr_period=greenheart_config["finance_parameters"][
-                "depreciation_period"
-            ],
-            refurb=[0],
-        )
+        # pf.add_capital_item(
+        #     name="Desal System",
+        #     cost=capex_breakdown["desal"],
+        #     depr_type=greenheart_config["finance_parameters"]["depreciation_method"],
+        #     depr_period=greenheart_config["finance_parameters"][
+        #         "depreciation_period"
+        #     ],
+        #     refurb=[0],
+        # )
         pf.add_fixed_cost(
             name="Desal Fixed O&M Cost",
             usage=1.0,
@@ -1582,7 +1508,7 @@ def run_profast_full_plant_model(
     electricity_ptc_in_dollars_per_kw = -npf.fv(
         greenheart_config['finance_parameters']['costing_general_inflation'],
         greenheart_config["project_parameters"]["atb_year"]
-        + round((wind_cost_results.installation_time / 12))
+        + round((installation_period_months / 12))
         - greenheart_config["finance_parameters"]["discount_years"]["electricity_ptc"],
         0,
         incentive_dict["electricity_ptc"],
@@ -1608,7 +1534,7 @@ def run_profast_full_plant_model(
     h2_ptc_inflation_adjusted = -npf.fv(
         greenheart_config['finance_parameters']['costing_general_inflation'], # use ATB year (cost inflation 2.5%) costing_general_inflation
         greenheart_config["project_parameters"]["atb_year"]
-        + round((wind_cost_results.installation_time / 12))
+        + round((installation_period_months / 12))
         - greenheart_config["finance_parameters"]["discount_years"]["h2_ptc"],
         0,
         incentive_dict["h2_ptc"],
@@ -1622,7 +1548,7 @@ def run_profast_full_plant_model(
     )  # TODO check decay
 
     # ------------------------------------ solve and post-process -----------------------------
-
+    
     sol = pf.solve_price()
 
     df = pf.cash_flow_out
