@@ -436,8 +436,8 @@ def run_electrolyzer_cost(
         "electrolyzer_total_capital_cost": electrolyzer_total_capital_cost,
         "electrolyzer_OM_cost_annual": electrolyzer_OM_cost,
     }
-    elec_financial_info = summarize_electrolysis_cost_and_performance(electrolyzer_physics_results,greenheart_config["electrolyzer"])
-    electrolyzer_cost_results.update(elec_financial_info)
+    # elec_financial_info = summarize_electrolysis_cost_and_performance(electrolyzer_physics_results,greenheart_config["electrolyzer"])
+    # electrolyzer_cost_results.update(elec_financial_info)
     # print some results if desired
     if verbose:
         print("\nHydrogen Cost Results:")
