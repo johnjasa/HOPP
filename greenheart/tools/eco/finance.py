@@ -900,7 +900,10 @@ def run_profast_grid_only(
     electrolyzer_cost_info = summarize_electrolysis_cost_and_performance(electrolyzer_physics_results,greenheart_config["electrolyzer"])
     gen_inflation = greenheart_config["finance_parameters"]["profast_general_inflation"]
 
-
+    if "feedstock_region" in greenheart_config["site"]:
+        feedstock_region = greenheart_config["site"]["feedstock_region"]
+    else:
+        feedstock_region = "US Average"
     if "profast_config" in greenheart_config["finance_parameters"]:
         pf_config = greenheart_config["finance_parameters"]["profast_config"]
         analysis_start_year = pf_config["params"]["analysis start year"]
@@ -1011,20 +1014,12 @@ def run_profast_grid_only(
     )
 
     # ---------------------- Add feedstocks, note the various cost options-------------------
-    galperkg = 3.785411784
+    
     pf.add_feedstock(
         name="Water",
-        usage=sum(
-            electrolyzer_physics_results["H2_Results"][
-                "Water Hourly Consumption [kg/hr]"
-            ]
-        )
-        * galperkg
-        / electrolyzer_physics_results["H2_Results"][
-            "Life: Annual H2 production [kg/year]"
-        ],
+        usage=electrolyzer_physics_results["H2_Results"]["Rated BOL: Gal H2O per kg-H2"],
         unit="gal",
-        cost="US Average",
+        cost=feedstock_region,
         escalation=gen_inflation,
     )
 
@@ -1420,7 +1415,7 @@ def run_profast_full_plant_model(
             name="Water",
             usage=electrolyzer_physics_results["H2_Results"]["Rated BOL: Gal H2O per kg-H2"],
             unit="gal",
-            cost="US Average",
+            cost=feedstock_region,
             escalation=gen_inflation,
         )
     else:
@@ -1463,7 +1458,7 @@ def run_profast_full_plant_model(
     # ------------------------------------- add incentives -----------------------------------
     """ Note: units must be given to ProFAST in terms of dollars per unit of the primary commodity being produced
         Note: full tech-nutral (wind) tax credits are no longer available if constructions starts after Jan. 1 2034 (Jan 1. 2033 for h2 ptc)"""
-
+    sunset_years = 10
     # catch incentive option and add relevant incentives
     incentive_dict = greenheart_config["policy_parameters"][
         "option%s" % (incentive_option)
@@ -1478,10 +1473,8 @@ def run_profast_full_plant_model(
         "one time cap inct",
         {
             "value": electricity_itc_value_dollars,
-            "depr type": greenheart_config["finance_parameters"]["depreciation_method"],
-            "depr period": greenheart_config["finance_parameters"][
-                "depreciation_period"
-            ],
+            "depr type": depr_type,
+            "depr period": depr_period,
             "depreciable": True,
         },
     )
@@ -1495,10 +1488,8 @@ def run_profast_full_plant_model(
         "one time cap inct",
         {
             "value": electricity_itc_value_dollars_h2_store,
-            "depr type": greenheart_config["finance_parameters"]["depreciation_method"],
-            "depr period": greenheart_config["finance_parameters"][
-                "depreciation_period"
-            ],
+            "depr type": depr_type,
+            "depr period": depr_period,
             "depreciable": True,
         },
     )
@@ -1513,12 +1504,7 @@ def run_profast_full_plant_model(
         0,
         incentive_dict["electricity_ptc"],
     )  # given in 1992 dollars but adjust for inflation
-    kw_per_kg_h2 = (
-        sum(hopp_results["combined_hybrid_power_production_hopp"])
-        / electrolyzer_physics_results["H2_Results"][
-            "Life: Annual H2 production [kg/year]"
-        ]
-    )
+    kw_per_kg_h2 = np.mean(np.array(electrolyzer_cost_info["electrolyzer_eff_kWh_pr_kg"])[:sunset_years])
     electricity_ptc_in_dollars_per_kg_h2 = (
         electricity_ptc_in_dollars_per_kw * kw_per_kg_h2
     )
@@ -1526,7 +1512,7 @@ def run_profast_full_plant_model(
         name="Electricity PTC",
         value=electricity_ptc_in_dollars_per_kg_h2,
         decay=-gen_inflation,
-        sunset_years=10,
+        sunset_years=sunset_years,
         tax_credit=True,
     )  # TODO check decay
 
@@ -1543,12 +1529,12 @@ def run_profast_full_plant_model(
         name="H2 PTC",
         value=h2_ptc_inflation_adjusted,
         decay=-gen_inflation, #correct inflation
-        sunset_years=10,
+        sunset_years=sunset_years,
         tax_credit=True,
     )  # TODO check decay
 
     # ------------------------------------ solve and post-process -----------------------------
-    
+
     sol = pf.solve_price()
 
     df = pf.cash_flow_out
