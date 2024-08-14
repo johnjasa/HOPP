@@ -122,12 +122,20 @@ def run_h2_transport_compressor(
     ):
         ########## compressor model from Jamie Kee based on HDSAM
         flow_rate_kg_per_hr = max(
-            electrolyzer_physics_results["H2_Results"][
-                "Hydrogen Hourly Production [kg/hr]"
-            ]
+            [electrolyzer_physics_results["H2_Results"]['Rated BOL: H2 Production [kg/hr]'],
+            max(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"])]
         )  # kg/hr
-        number_of_compressors = 2  # a third will be added as backup in the code
-        p_inlet = 20  # bar
+        
+        if "n_compressors" in greenheart_config["h2_transport_compressor"].keys():
+            number_of_compressors = greenheart_config["h2_transport_compressor"]["n_compressors"]
+        else:
+            number_of_compressors = 2  # a third will be added as backup in the code
+        
+        if "inlet_pressure" in greenheart_config["h2_transport_compressor"].keys():
+            p_inlet = greenheart_config["h2_transport_compressor"]["inlet_pressure"]
+        else:
+            p_inlet = 20  # bar
+
         p_outlet = greenheart_config["h2_transport_compressor"][
             "outlet_pressure"
         ]  # bar
