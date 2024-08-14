@@ -122,8 +122,7 @@ def run_h2_transport_compressor(
     ):
         ########## compressor model from Jamie Kee based on HDSAM
         flow_rate_kg_per_hr = max(
-            [electrolyzer_physics_results["H2_Results"]['Rated BOL: H2 Production [kg/hr]'],
-            max(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"])]
+            max(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"])
         )  # kg/hr
         
         if "n_compressors" in greenheart_config["h2_transport_compressor"].keys():
@@ -198,8 +197,7 @@ def run_h2_transport_pipe(
     # prepare inputs
     export_pipe_length = orbit_config["site"]["distance_to_landfall"]  # Length [km]
     mass_flow_rate = max(
-        [electrolyzer_physics_results["H2_Results"]['Rated BOL: H2 Production [kg/hr]'],
-        max(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"])]
+        max(electrolyzer_physics_results["H2_Results"]["Hydrogen Hourly Production [kg/hr]"])
     ) * (
         (1.0 / 60.0) ** 2
     )  # from [kg/hr] to mass flow rate in [kg/s] assuming 300 MW -> 1.5 kg/s
