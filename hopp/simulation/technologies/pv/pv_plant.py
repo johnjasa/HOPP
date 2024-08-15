@@ -214,6 +214,18 @@ class PVPlant(PowerSource):
         return  area
 
     @property
+    def land_coverage_area(self):
+        """Estimate Total Module Land Cover Area [m^2]"""
+        import numpy as np
+        module_attribs = get_module_attribs(self._system_model)
+        tilt_angle_max_deg = self._system_model.value("tilt") + (self._system_model.value("rotlim")/2)
+        # tilt_angle_min_deg = self._system_model.value("tilt") - (self._system_model.value("rotlim")/2)
+        max_land_cover_module_m2 = module_attribs['width']*(module_attribs['length']*np.cos(np.deg2rad(tilt_angle_max_deg)))
+        num_modules = self.system_capacity_kw / module_attribs['P_mp_ref']
+        land_coverage_area = num_modules * max_land_cover_module_m2 #m^2
+        return land_coverage_area
+
+    @property
     def system_mass(self):
         """Estimate Total Module Mass [kg]"""
         return self.footprint_area * self.module_unit_mass
