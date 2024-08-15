@@ -26,7 +26,8 @@ def setup_hopp(
     
     if "battery" in hopp_config["technologies"].keys() and \
         ("desired_schedule" not in hopp_config["site"].keys() or hopp_config["site"]["desired_schedule"] == []):
-        hopp_config["site"]["desired_schedule"] = [greenheart_config["electrolyzer"]["rating"]]*8760
+        hopp_config["site"]["desired_schedule"] = [greenheart_config["electrolyzer"]["turndown_ratio"]*greenheart_config["electrolyzer"]["rating"]]*8760
+        hopp_config["site"]["curtailment_value_type"] = "grid"
     hopp_site = SiteInfo(**hopp_config["site"])
 
     # adjust mean wind speed if desired
@@ -176,7 +177,7 @@ def setup_hopp(
 
 # Function to run hopp from provided inputs from setup_hopp()
 def run_hopp(hi, project_lifetime, verbose=False):
-
+    #hi.system.simulate_power()
     hi.simulate(project_life=project_lifetime)
 
     # store results for later use
