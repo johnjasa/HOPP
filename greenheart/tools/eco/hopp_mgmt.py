@@ -30,7 +30,7 @@ def setup_hopp(
         minimum_load_kw = (power_for_peripherals_kw/1e3) + (greenheart_config["electrolyzer"]["turndown_ratio"]*greenheart_config["electrolyzer"]["rating"])
         hopp_config["site"]["desired_schedule"] = [minimum_load_kw]*8760
         hopp_config["site"]["curtailment_value_type"] = "grid"
-        hopp_config["technologies"]["grid"]["interconnect_kw"] = (power_for_peripherals_kw/1e3) + greenheart_config["electrolyzer"]["rating"]
+        hopp_config["technologies"]["grid"]["interconnect_kw"] = power_for_peripherals_kw + greenheart_config["electrolyzer"]["rating"]*1e3
     hopp_site = SiteInfo(**hopp_config["site"])
 
     # adjust mean wind speed if desired
