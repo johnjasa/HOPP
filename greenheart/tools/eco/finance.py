@@ -391,7 +391,6 @@ def run_capex(
             wind_capex = wind_cost_results.total_wind_cost_no_export
             wind_export_cost = wind_cost_results.total_used_export_system_costs
         else:
-            wind_capex = 0.0
             wind_export_cost = 0.0
     else:
             wind_capex = 0.0
