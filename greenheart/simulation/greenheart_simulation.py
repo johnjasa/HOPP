@@ -239,7 +239,7 @@ class GreenHeartSimulationOutput:
 
     platform_results: Optional[dict] = field(default=None)
 
-def setup_greenheart_simulation(config: GreenHeartSimulationConfig):
+def setup_greenheart_simulation(config: GreenHeartSimulationConfig,power_for_peripherals_kw=0.0):
 
     # run orbit for wind plant construction and other costs
     ## TODO get correct weather (wind, wave) inputs for ORBIT input (possibly via ERA5)
@@ -376,6 +376,7 @@ def setup_greenheart_simulation(config: GreenHeartSimulationConfig):
         config.turbine_config,
         config.floris_config,
         config.design_scenario,
+        power_for_peripherals_kw,
         wind_cost_results,
         show_plots=config.show_plots,
         save_plots=config.save_plots,
