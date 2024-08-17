@@ -1,6 +1,9 @@
 from rex import NSRDBX
 from rex.sam_resource import SAMResource
 import numpy as np 
+from typing import Optional, Union
+from pathlib import Path
+import os
 from hopp.simulation.technologies.resource.resource import Resource
 WTK_V10_BASE = "/datasets/WIND/conus/v1.0.0/wtk_conus_"
 WTK_V11_BASE = "/datasets/WIND/conus/v1.1.0/wtk_conus_"
@@ -11,6 +14,7 @@ class HPCWindData(Resource):
         lon: float,
         year: int,
         hub_height_meters: float,
+        wtk_source_path: Union[str,Path] = "",
         filepath: str = "",
         **kwargs
         ):
@@ -19,7 +23,8 @@ class HPCWindData(Resource):
         lat (float): site latitude
         lon (float): site longitude
         resource_year (int): year to get resource data for
-        filepath (str): filepath for wind toolkit data on HPC
+        wtk_source_path (str): directory of wind resource data on HPC
+        filepath (str): filepath for wind toolkit h5 file on HPC
         """
         
         
@@ -32,15 +37,25 @@ class HPCWindData(Resource):
         self.hub_height_meters = hub_height_meters
         self.allowed_hub_heights_meters = [10, 40, 60, 80, 100, 120, 140, 160, 200]
         self.data_hub_heights = self.calculate_heights_to_download()
+        
 
-        if filepath == "":
+        if filepath == "" and wtk_source_path=="":
             if self.year < 2014:
                 self.wtk_file = WTK_V10_BASE + "{}.h5".format(self.year)
             # wtk_file = '/datasets/WIND/conus/v1.0.0/wtk_conus_{year}.h5'.format(year=self.year)
             elif self.year == 2014:
                 self.wtk_file = WTK_V11_BASE + "{}.h5".format(self.year)
-        else:
+        elif filepath != "" and wtk_source_path == "":
             self.wtk_file = filepath
+        elif filepath=="" and wtk_source_path !="":
+            self.wtk_file = os.path.join(str(wtk_source_path),"wtk_conus_{}.h5".format(self.year))
+        else:
+            if self.year < 2014:
+                self.wtk_file = WTK_V10_BASE + "{}.h5".format(self.year)
+            # wtk_file = '/datasets/WIND/conus/v1.0.0/wtk_conus_{year}.h5'.format(year=self.year)
+            elif self.year == 2014:
+                self.wtk_file = WTK_V11_BASE + "{}.h5".format(self.year)
+            
         self.extract_resource()
         self.format_data() 
 

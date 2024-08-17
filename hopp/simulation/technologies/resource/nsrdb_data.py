@@ -2,7 +2,9 @@ from rex import NSRDBX
 from rex.sam_resource import SAMResource
 import numpy as np 
 from hopp.simulation.technologies.resource.resource import Resource
-
+from typing import Optional, Union
+from pathlib import Path
+import os
 # import pandas as pd
 NSRDB_DEP = "/datasets/NSRDB/deprecated_v3/nsrdb_"
 NSRDB_NEW = "/datasets/NSRDB/current/nsrdb_"
@@ -15,6 +17,7 @@ class HPCSolarData(Resource):
         lat: float,
         lon: float,
         year: int,
+        nsrdb_source_path: Union[str,Path] = "",
         filepath: str = "",
         **kwargs):
         """
@@ -49,10 +52,14 @@ class HPCSolarData(Resource):
         self.year = year
         super().__init__(lat, lon, year)
 
-        if filepath == "":
+        if filepath == "" and nsrdb_source_path=="":
             self.nsrdb_file = NSRDB_DEP + "{}.h5".format(self.year)
-        else:
+        elif filepath != "" and nsrdb_source_path == "":
             self.nsrdb_file = filepath
+        elif filepath=="" and nsrdb_source_path !="":
+            self.nsrdb_file = os.path.join(str(nsrdb_source_path),"nsrdb_{}.h5".format(self.year))
+        else:
+            self.nsrdb_file = NSRDB_DEP + "{}.h5".format(self.year)
         # Pull data from HPC NSRDB dataset
         self.extract_resource()
 
