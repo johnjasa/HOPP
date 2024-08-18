@@ -306,11 +306,11 @@ def run_electrolyzer_cost(
     electrolyzer_cost_model = greenheart_config["electrolyzer"][
             "cost_model"
         ]  # can be "basic" or "singlitico2021" or "custom"
+    electrolyzer_size_mw = greenheart_config["electrolyzer"]["rating"]
     if electrolyzer_cost_model == "custom":
         electrolyzer_total_capital_cost,electrolyzer_OM_cost = calc_electrolysis_capex_fom(electrolyzer_physics_results,greenheart_config["electrolyzer"])
     else:
         H2_Results = electrolyzer_physics_results["H2_Results"]
-        electrolyzer_size_mw = greenheart_config["electrolyzer"]["rating"]
         useful_life = greenheart_config["project_parameters"]["project_lifetime"]
         atb_year = greenheart_config["project_parameters"]["atb_year"]
         electrical_generation_timeseries = electrolyzer_physics_results[
