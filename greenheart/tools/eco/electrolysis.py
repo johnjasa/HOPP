@@ -303,7 +303,9 @@ def run_electrolyzer_cost(
 ):
 
     # unpack inputs
-    
+    electrolyzer_cost_model = greenheart_config["electrolyzer"][
+            "cost_model"
+        ]  # can be "basic" or "singlitico2021" or "custom"
     if electrolyzer_cost_model == "custom":
         electrolyzer_total_capital_cost,electrolyzer_OM_cost = calc_electrolysis_capex_fom(electrolyzer_physics_results,greenheart_config["electrolyzer"])
     else:
@@ -316,9 +318,7 @@ def run_electrolyzer_cost(
         ]
         nturbines = hopp_config["technologies"]["wind"]["num_turbines"]
 
-        electrolyzer_cost_model = greenheart_config["electrolyzer"][
-            "cost_model"
-        ]  # can be "basic" or "singlitico2021"
+        
 
         # run hydrogen production cost model - from hopp examples
         if design_scenario["electrolyzer_location"] == "onshore":
