@@ -303,133 +303,136 @@ def run_electrolyzer_cost(
 ):
 
     # unpack inputs
-    H2_Results = electrolyzer_physics_results["H2_Results"]
-    electrolyzer_size_mw = greenheart_config["electrolyzer"]["rating"]
-    useful_life = greenheart_config["project_parameters"]["project_lifetime"]
-    atb_year = greenheart_config["project_parameters"]["atb_year"]
-    electrical_generation_timeseries = electrolyzer_physics_results[
-        "power_to_electrolyzer_kw"
-    ]
-    nturbines = hopp_config["technologies"]["wind"]["num_turbines"]
-
-    electrolyzer_cost_model = greenheart_config["electrolyzer"][
-        "cost_model"
-    ]  # can be "basic" or "singlitico2021"
-
-    # run hydrogen production cost model - from hopp examples
-    if design_scenario["electrolyzer_location"] == "onshore":
-        offshore = 0
+    
+    if electrolyzer_cost_model == "custom":
+        electrolyzer_total_capital_cost,electrolyzer_OM_cost = calc_electrolysis_capex_fom(electrolyzer_physics_results,greenheart_config["electrolyzer"])
     else:
-        offshore = 1
+        H2_Results = electrolyzer_physics_results["H2_Results"]
+        electrolyzer_size_mw = greenheart_config["electrolyzer"]["rating"]
+        useful_life = greenheart_config["project_parameters"]["project_lifetime"]
+        atb_year = greenheart_config["project_parameters"]["atb_year"]
+        electrical_generation_timeseries = electrolyzer_physics_results[
+            "power_to_electrolyzer_kw"
+        ]
+        nturbines = hopp_config["technologies"]["wind"]["num_turbines"]
 
-    if design_scenario["electrolyzer_location"] == "turbine":
-        per_turb_electrolyzer_size_mw = electrolyzer_size_mw / nturbines
-        per_turb_h2_annual_output = H2_Results["hydrogen_annual_output"] / nturbines
-        per_turb_electrical_generation_timeseries = (
-            electrical_generation_timeseries / nturbines
-        )
+        electrolyzer_cost_model = greenheart_config["electrolyzer"][
+            "cost_model"
+        ]  # can be "basic" or "singlitico2021"
 
-        if electrolyzer_cost_model == "basic":
-            (
-                cf_h2_annuals,
-                per_turb_electrolyzer_total_capital_cost,
-                per_turb_electrolyzer_OM_cost,
-                per_turb_electrolyzer_capex_kw,
-                time_between_replacement,
-                h2_tax_credit,
-                h2_itc,
-            ) = basic_H2_cost_model(
-                greenheart_config["electrolyzer"]["electrolyzer_capex"],
-                greenheart_config["electrolyzer"]["time_between_replacement"],
-                per_turb_electrolyzer_size_mw,
-                useful_life,
-                atb_year,
-                per_turb_electrical_generation_timeseries,
-                per_turb_h2_annual_output,
-                0.0,
-                0.0,
-                include_refurb_in_opex=False,
-                offshore=offshore,
+        # run hydrogen production cost model - from hopp examples
+        if design_scenario["electrolyzer_location"] == "onshore":
+            offshore = 0
+        else:
+            offshore = 1
+
+        if design_scenario["electrolyzer_location"] == "turbine":
+            per_turb_electrolyzer_size_mw = electrolyzer_size_mw / nturbines
+            per_turb_h2_annual_output = H2_Results["hydrogen_annual_output"] / nturbines
+            per_turb_electrical_generation_timeseries = (
+                electrical_generation_timeseries / nturbines
             )
 
-        elif electrolyzer_cost_model == "singlitico2021":
+            if electrolyzer_cost_model == "basic":
+                (
+                    cf_h2_annuals,
+                    per_turb_electrolyzer_total_capital_cost,
+                    per_turb_electrolyzer_OM_cost,
+                    per_turb_electrolyzer_capex_kw,
+                    time_between_replacement,
+                    h2_tax_credit,
+                    h2_itc,
+                ) = basic_H2_cost_model(
+                    greenheart_config["electrolyzer"]["electrolyzer_capex"],
+                    greenheart_config["electrolyzer"]["time_between_replacement"],
+                    per_turb_electrolyzer_size_mw,
+                    useful_life,
+                    atb_year,
+                    per_turb_electrical_generation_timeseries,
+                    per_turb_h2_annual_output,
+                    0.0,
+                    0.0,
+                    include_refurb_in_opex=False,
+                    offshore=offshore,
+                )
 
-            P_elec = per_turb_electrolyzer_size_mw * 1e-3  # [GW]
-            RC_elec = greenheart_config["electrolyzer"][
-                "electrolyzer_capex"
-            ]  # [USD/kW]
+            elif electrolyzer_cost_model == "singlitico2021":
 
-            pem_offshore = PEMCostsSingliticoModel(elec_location=offshore)
+                P_elec = per_turb_electrolyzer_size_mw * 1e-3  # [GW]
+                RC_elec = greenheart_config["electrolyzer"][
+                    "electrolyzer_capex"
+                ]  # [USD/kW]
 
-            (
-                per_turb_electrolyzer_capital_cost_musd,
-                per_turb_electrolyzer_om_cost_musd,
-            ) = pem_offshore.run(P_elec, RC_elec)
+                pem_offshore = PEMCostsSingliticoModel(elec_location=offshore)
 
-            per_turb_electrolyzer_total_capital_cost = (
-                per_turb_electrolyzer_capital_cost_musd * 1e6
-            )  # convert from M USD to USD
-            per_turb_electrolyzer_OM_cost = (
-                per_turb_electrolyzer_om_cost_musd * 1e6
-            )  # convert from M USD to USD
+                (
+                    per_turb_electrolyzer_capital_cost_musd,
+                    per_turb_electrolyzer_om_cost_musd,
+                ) = pem_offshore.run(P_elec, RC_elec)
 
-        electrolyzer_total_capital_cost = (
-            per_turb_electrolyzer_total_capital_cost * nturbines
-        )
-        electrolyzer_OM_cost = per_turb_electrolyzer_OM_cost * nturbines
-
-    else:
-        if electrolyzer_cost_model == "basic":
-            (
-                cf_h2_annuals,
-                electrolyzer_total_capital_cost,
-                electrolyzer_OM_cost,
-                electrolyzer_capex_kw,
-                time_between_replacement,
-                h2_tax_credit,
-                h2_itc,
-            ) = basic_H2_cost_model(
-                greenheart_config["electrolyzer"]["electrolyzer_capex"],
-                greenheart_config["electrolyzer"]["time_between_replacement"],
-                electrolyzer_size_mw,
-                useful_life,
-                atb_year,
-                electrical_generation_timeseries,
-                H2_Results["hydrogen_annual_output"],
-                0.0,
-                0.0,
-                include_refurb_in_opex=False,
-                offshore=offshore,
-            )
-        elif electrolyzer_cost_model == "singlitico2021":
-
-            P_elec = electrolyzer_size_mw * 1e-3  # [GW]
-            RC_elec = greenheart_config["electrolyzer"][
-                "electrolyzer_capex"
-            ]  # [USD/kW]
-
-            pem_offshore = PEMCostsSingliticoModel(elec_location=offshore)
-
-            (
-                electrolyzer_capital_cost_musd,
-                electrolyzer_om_cost_musd,
-            ) = pem_offshore.run(P_elec, RC_elec)
+                per_turb_electrolyzer_total_capital_cost = (
+                    per_turb_electrolyzer_capital_cost_musd * 1e6
+                )  # convert from M USD to USD
+                per_turb_electrolyzer_OM_cost = (
+                    per_turb_electrolyzer_om_cost_musd * 1e6
+                )  # convert from M USD to USD
 
             electrolyzer_total_capital_cost = (
-                electrolyzer_capital_cost_musd * 1e6
-            )  # convert from M USD to USD
-            electrolyzer_OM_cost = (
-                electrolyzer_om_cost_musd * 1e6
-            )  # convert from M USD to USD
-        elif electrolyzer_cost_model == "custom":
-            electrolyzer_total_capital_cost,electrolyzer_OM_cost = calc_electrolysis_capex_fom(electrolyzer_physics_results,greenheart_config["electrolyzer"])
-        else:
-            raise (
-                ValueError(
-                    "Electrolyzer cost model must be one of['basic', 'singlitico2021'] but '%s' was given"
-                    % (electrolyzer_cost_model)
-                )
+                per_turb_electrolyzer_total_capital_cost * nturbines
             )
+            electrolyzer_OM_cost = per_turb_electrolyzer_OM_cost * nturbines
+
+        else:
+            if electrolyzer_cost_model == "basic":
+                (
+                    cf_h2_annuals,
+                    electrolyzer_total_capital_cost,
+                    electrolyzer_OM_cost,
+                    electrolyzer_capex_kw,
+                    time_between_replacement,
+                    h2_tax_credit,
+                    h2_itc,
+                ) = basic_H2_cost_model(
+                    greenheart_config["electrolyzer"]["electrolyzer_capex"],
+                    greenheart_config["electrolyzer"]["time_between_replacement"],
+                    electrolyzer_size_mw,
+                    useful_life,
+                    atb_year,
+                    electrical_generation_timeseries,
+                    H2_Results["hydrogen_annual_output"],
+                    0.0,
+                    0.0,
+                    include_refurb_in_opex=False,
+                    offshore=offshore,
+                )
+            elif electrolyzer_cost_model == "singlitico2021":
+
+                P_elec = electrolyzer_size_mw * 1e-3  # [GW]
+                RC_elec = greenheart_config["electrolyzer"][
+                    "electrolyzer_capex"
+                ]  # [USD/kW]
+
+                pem_offshore = PEMCostsSingliticoModel(elec_location=offshore)
+
+                (
+                    electrolyzer_capital_cost_musd,
+                    electrolyzer_om_cost_musd,
+                ) = pem_offshore.run(P_elec, RC_elec)
+
+                electrolyzer_total_capital_cost = (
+                    electrolyzer_capital_cost_musd * 1e6
+                )  # convert from M USD to USD
+                electrolyzer_OM_cost = (
+                    electrolyzer_om_cost_musd * 1e6
+                )  # convert from M USD to USD
+            
+            else:
+                raise (
+                    ValueError(
+                        "Electrolyzer cost model must be one of['basic', 'singlitico2021', or 'custom'] but '%s' was given"
+                        % (electrolyzer_cost_model)
+                    )
+                )
 
     # package outputs for return
     electrolyzer_cost_results = {
