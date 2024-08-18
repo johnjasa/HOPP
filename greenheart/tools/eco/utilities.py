@@ -76,22 +76,27 @@ def get_inputs(
 
     # update floris_config file with correct input from other files
     # load floris inputs
-    if (
-        hopp_config["technologies"]["wind"]["model_name"] == "floris"
-    ):  # TODO replace elements of the file
-        if filename_floris_config is None:
-            raise (ValueError("floris input file must be specified."))
+    if "wind" in hopp_config["technologies"]:
+        if (
+            hopp_config["technologies"]["wind"]["model_name"] == "floris"
+        ):  # TODO replace elements of the file
+            if filename_floris_config is None:
+                raise (ValueError("floris input file must be specified."))
+            else:
+                floris_config = load_yaml(filename_floris_config)
+                floris_config.update({"farm": {"turbine_type": turbine_config}})
+                # print turbine inputs if desired
+        
         else:
-            floris_config = load_yaml(filename_floris_config)
-            floris_config.update({"farm": {"turbine_type": turbine_config}})
+            floris_config = None
+        if verbose:
+            print("\nTurbine configuration:")
+            for key in turbine_config.keys():
+                print(key, ": ", turbine_config[key])
     else:
         floris_config = None
 
-    # print turbine inputs if desired
-    if verbose:
-        print("\nTurbine configuration:")
-        for key in turbine_config.keys():
-            print(key, ": ", turbine_config[key])
+        
 
     ############## provide custom layout for ORBIT and FLORIS if desired
     if filename_orbit_config != None:

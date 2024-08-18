@@ -34,24 +34,25 @@ def setup_hopp(
     hopp_site = SiteInfo(**hopp_config["site"])
 
     # adjust mean wind speed if desired
-    wind_data = hopp_site.wind_resource._data["data"]
-    wind_speed = [W[2] for W in wind_data]
-    if greenheart_config["site"]["mean_windspeed"]:
-        if np.average(wind_speed) != greenheart_config["site"]["mean_windspeed"]:
-            wind_speed += greenheart_config["site"]["mean_windspeed"] - np.average(
-                wind_speed
-            )
-            for i in np.arange(0, len(wind_speed)):
-                # make sure we don't have negative wind speeds after correction
-                hopp_site.wind_resource._data["data"][i][2] = np.maximum(
-                    wind_speed[i], 0
+    if hopp_site.wind:
+        wind_data = hopp_site.wind_resource._data["data"]
+        wind_speed = [W[2] for W in wind_data]
+        if greenheart_config["site"]["mean_windspeed"]:
+            if np.average(wind_speed) != greenheart_config["site"]["mean_windspeed"]:
+                wind_speed += greenheart_config["site"]["mean_windspeed"] - np.average(
+                    wind_speed
                 )
-    else:
-        greenheart_config["site"]["mean_windspeed"] = np.average(wind_speed)
+                for i in np.arange(0, len(wind_speed)):
+                    # make sure we don't have negative wind speeds after correction
+                    hopp_site.wind_resource._data["data"][i][2] = np.maximum(
+                        wind_speed[i], 0
+                    )
+        else:
+            greenheart_config["site"]["mean_windspeed"] = np.average(wind_speed)
 
     ################ set up HOPP technology inputs
     
-    if hopp_config["site"]["wind"]:
+    if hopp_site.wind:
         if hopp_config["technologies"]["wind"]["model_name"] == "floris":
             if design_scenario["wind_location"] == "offshore":
                 floris_config["farm"]["layout_x"] = (

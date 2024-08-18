@@ -82,102 +82,109 @@ class WindCostOutputs:
 def run_wind_cost_model(
     wind_cost_inputs: WindCostConfig, verbose=False
 ) -> WindCostOutputs:
+    if "wind" in wind_cost_inputs.hopp_config["technologies"]:
+        if wind_cost_inputs.design_scenario["wind_location"] == "offshore":
 
-    if wind_cost_inputs.design_scenario["wind_location"] == "offshore":
+            # if per kw
+            project, orbit_hybrid_electrical_export_project = run_orbit(
+                wind_cost_inputs.orbit_config,
+                verbose=verbose,
+                weather=wind_cost_inputs.weather,
+                orbit_hybrid_electrical_export_config=wind_cost_inputs.orbit_hybrid_electrical_export_config,
+            )
 
-        # if per kw
-        project, orbit_hybrid_electrical_export_project = run_orbit(
-            wind_cost_inputs.orbit_config,
-            verbose=verbose,
-            weather=wind_cost_inputs.weather,
-            orbit_hybrid_electrical_export_config=wind_cost_inputs.orbit_hybrid_electrical_export_config,
-        )
-
-        (
-            total_wind_cost_no_export,
-            total_used_export_system_costs,
-        ) = breakout_export_costs_from_orbit_results(
-            project,
-            wind_cost_inputs.greenheart_config,
-            wind_cost_inputs.design_scenario,
-        )
-
-        if orbit_hybrid_electrical_export_project is not None:
             (
-                _,
+                total_wind_cost_no_export,
                 total_used_export_system_costs,
             ) = breakout_export_costs_from_orbit_results(
-                orbit_hybrid_electrical_export_project,
+                project,
                 wind_cost_inputs.greenheart_config,
                 wind_cost_inputs.design_scenario,
             )
 
-        # WIND ONLY Total O&M expenses including fixed, variable, and capacity-based, $/year
-        # use values from hybrid substation if a hybrid plant
-        if orbit_hybrid_electrical_export_project is None:
+            if orbit_hybrid_electrical_export_project is not None:
+                (
+                    _,
+                    total_used_export_system_costs,
+                ) = breakout_export_costs_from_orbit_results(
+                    orbit_hybrid_electrical_export_project,
+                    wind_cost_inputs.greenheart_config,
+                    wind_cost_inputs.design_scenario,
+                )
 
-            annual_operating_cost_wind = (
-                max(project.monthly_opex.values()) * 12
-            )  # np.average(hopp_results["hybrid_plant"].wind.om_total_expense)
+            # WIND ONLY Total O&M expenses including fixed, variable, and capacity-based, $/year
+            # use values from hybrid substation if a hybrid plant
+            if orbit_hybrid_electrical_export_project is None:
 
-        else:
+                annual_operating_cost_wind = (
+                    max(project.monthly_opex.values()) * 12
+                )  # np.average(hopp_results["hybrid_plant"].wind.om_total_expense)
 
-            annual_operating_cost_wind = (
-                max(orbit_hybrid_electrical_export_project.monthly_opex.values()) * 12
+            else:
+
+                annual_operating_cost_wind = (
+                    max(orbit_hybrid_electrical_export_project.monthly_opex.values()) * 12
+                )
+
+            if (
+                "installation_time"
+                in wind_cost_inputs.greenheart_config["project_parameters"]
+            ):
+                installation_time = wind_cost_inputs.greenheart_config[
+                    "project_parameters"
+                ]["installation_time"]
+            else:
+                installation_time = (project.installation_time / (365 * 24)) * (12.0 / 1.0)
+
+            # if total amount
+            # TODO
+            return WindCostOutputs(
+                total_wind_cost_no_export=total_wind_cost_no_export,
+                total_used_export_system_costs=total_used_export_system_costs,
+                annual_operating_cost_wind=annual_operating_cost_wind,
+                installation_time=installation_time,
+                orbit_project=project,
+            )
+        elif wind_cost_inputs.design_scenario["wind_location"] == "onshore":
+            total_wind_cost_no_export = (
+                wind_cost_inputs.hopp_config["config"]["cost_info"][
+                    "wind_installed_cost_mw"
+                ]
+                * wind_cost_inputs.hopp_config["technologies"]["wind"]["num_turbines"]
+                * wind_cost_inputs.turbine_config["turbine_rating"]
             )
 
-        if (
-            "installation_time"
-            in wind_cost_inputs.greenheart_config["project_parameters"]
-        ):
-            installation_time = wind_cost_inputs.greenheart_config[
-                "project_parameters"
-            ]["installation_time"]
-        else:
-            installation_time = (project.installation_time / (365 * 24)) * (12.0 / 1.0)
-
-        # if total amount
-        # TODO
-        return WindCostOutputs(
-            total_wind_cost_no_export=total_wind_cost_no_export,
-            total_used_export_system_costs=total_used_export_system_costs,
-            annual_operating_cost_wind=annual_operating_cost_wind,
-            installation_time=installation_time,
-            orbit_project=project,
-        )
-    elif wind_cost_inputs.design_scenario["wind_location"] == "onshore":
-        total_wind_cost_no_export = (
-            wind_cost_inputs.hopp_config["config"]["cost_info"][
-                "wind_installed_cost_mw"
+            annual_operating_cost_wind = wind_cost_inputs.hopp_interface.system.wind.om_total_expense[
+                0
             ]
-            * wind_cost_inputs.hopp_config["technologies"]["wind"]["num_turbines"]
-            * wind_cost_inputs.turbine_config["turbine_rating"]
-        )
 
-        annual_operating_cost_wind = wind_cost_inputs.hopp_interface.system.wind.om_total_expense[
-            0
-        ]
+            if (
+                "installation_time"
+                in wind_cost_inputs.greenheart_config["project_parameters"]
+            ):
+                installation_time = wind_cost_inputs.greenheart_config[
+                    "project_parameters"
+                ]["installation_time"]
+            else:
+                installation_time = 0
 
-        if (
-            "installation_time"
-            in wind_cost_inputs.greenheart_config["project_parameters"]
-        ):
-            installation_time = wind_cost_inputs.greenheart_config[
-                "project_parameters"
-            ]["installation_time"]
+            return WindCostOutputs(
+                total_wind_cost_no_export=total_wind_cost_no_export,
+                annual_operating_cost_wind=annual_operating_cost_wind,
+                installation_time=installation_time,
+            )
         else:
-            installation_time = 0
-
-        return WindCostOutputs(
-            total_wind_cost_no_export=total_wind_cost_no_export,
-            annual_operating_cost_wind=annual_operating_cost_wind,
-            installation_time=installation_time,
-        )
+            raise ValueError(
+                "Wind design location must either be 'onshore' or 'offshore', but currently "
+                f"'wind_location' is set to {wind_cost_inputs.design_scenario['wind_location']}."
+            )
     else:
-        raise ValueError(
-            "Wind design location must either be 'onshore' or 'offshore', but currently "
-            f"'wind_location' is set to {wind_cost_inputs.design_scenario['wind_location']}."
-        )
+        return WindCostOutputs(
+                total_wind_cost_no_export=0,
+                annual_operating_cost_wind=0,
+                installation_time=36,
+            )
+
 
 
 # Function to run orbit from provided inputs - this is just for wind costs
