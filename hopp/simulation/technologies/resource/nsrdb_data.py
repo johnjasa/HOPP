@@ -6,8 +6,8 @@ from typing import Optional, Union
 from pathlib import Path
 import os
 # import pandas as pd
-NSRDB_DEP = "/datasets/NSRDB/deprecated_v3/nsrdb_"
-NSRDB_NEW = "/datasets/NSRDB/current/nsrdb_"
+NSRDB_DEP = "/kfs2/datasets/NSRDB/deprecated_v3/nsrdb_"
+NSRDB_NEW = "/kfs2/datasets/NSRDB/current/nsrdb_"
 # Pull Solar Resource Data directly from NSRDB on HPC
 # To be called instead of SolarResource from hopp.simulation.technologies.resource
 class HPCSolarData(Resource):

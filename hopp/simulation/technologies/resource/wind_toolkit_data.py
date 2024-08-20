@@ -5,8 +5,8 @@ from typing import Optional, Union
 from pathlib import Path
 import os
 from hopp.simulation.technologies.resource.resource import Resource
-WTK_V10_BASE = "/datasets/WIND/conus/v1.0.0/wtk_conus_"
-WTK_V11_BASE = "/datasets/WIND/conus/v1.1.0/wtk_conus_"
+WTK_V10_BASE = "/kfs2/datasets/WIND/conus/v1.0.0/wtk_conus_"
+WTK_V11_BASE = "kfs2/datasets/WIND/conus/v1.1.0/wtk_conus_"
 class HPCWindData(Resource):
     def __init__(
         self,
