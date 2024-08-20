@@ -1137,7 +1137,7 @@ def run_profast_full_plant_model(
     for i in variables:
         pf.add_fixed_cost(i,variables[i]["usage"],variables[i]["unit"],variables[i]["cost"],variables[i]["escalation"])
     
-    if isinstance(electrolyzer_cost_info["electrolyzer_var_om"],list):
+    if isinstance(electrolyzer_cost_info["electrolyzer_var_om"],(list,np.ndarray)):
         vopex_elec = dict(zip(years_of_operation,electrolyzer_cost_info["electrolyzer_var_om"]))
     elif isinstance(electrolyzer_cost_info["electrolyzer_var_om"],float) and (electrolyzer_cost_info["electrolyzer_var_om"]>0):
         vopex_elec = electrolyzer_cost_info["electrolyzer_var_om"] #$/kg-year
