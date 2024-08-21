@@ -336,9 +336,6 @@ def setup_greenheart_simulation(config: GreenHeartSimulationConfig,power_for_per
                     ]["om_capacity"]
                 )
             ):
-                config.hopp_config["technologies"]["wind"]["fin_model"]["system_costs"][
-                    "om_fixed"
-                ][i] = config.hopp_config["config"]["cost_info"]["wind_om_per_kw"]
 
                 om_fixed_wind_fin_model = config.hopp_config["technologies"]["wind"][
                     "fin_model"
