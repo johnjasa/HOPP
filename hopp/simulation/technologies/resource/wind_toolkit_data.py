@@ -60,10 +60,10 @@ class HPCWindData(Resource):
         self.download_resource()
         self.format_data() 
 
-        self.data = {'heights': [float(h) for h in self.data_hub_heights for i in range(4)],
-                     'fields':  [1, 2, 3, 4] * len(self.data_hub_heights),
-                     'data':    self.combined_data
-                    }
+        # self.data = {'heights': [float(h) for h in self.data_hub_heights for i in range(4)],
+        #              'fields':  [1, 2, 3, 4] * len(self.data_hub_heights),
+        #              'data':    self.combined_data
+        #             }
 
 
     
@@ -91,7 +91,7 @@ class HPCWindData(Resource):
         return heights
     
     # def extract_resource(self):
-    def download_resource(self): 
+    def download_resource(self):
         # Define file to download from
         # NOTE: Current setup of files on HPC WINDToolkit v1.0.0 = 2007-2013, v1.1.0 = 2014
         
@@ -153,11 +153,13 @@ class HPCWindData(Resource):
                                                        self.wind_dict['pressure_{h}m_arr'.format(h=self.data_hub_heights[0])],
                                                        self.wind_dict['windspeed_{h}m_arr'.format(h=self.data_hub_heights[0])],
                                                        self.wind_dict['winddirection_{h}m_arr'.format(h=self.data_hub_heights[0])])]
+        self.data = self.combined_data
+    
     @Resource.data.setter
     def data(self, data_file):
         dic = {
             'heights': [float(h) for h in self.data_hub_heights for i in range(4)],
             'fields':  [1, 2, 3, 4] * len(self.data_hub_heights),
-            'data':    self.combined_data
+            'data':    data_file #self.combined_data
             }
         self._data = dic

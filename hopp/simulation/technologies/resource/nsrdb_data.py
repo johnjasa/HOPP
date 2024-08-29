@@ -151,8 +151,9 @@ class HPCSolarData(Resource):
         # self.solar_zenith_angle_arr = list(np.round(self.solar_zenith_angle_arr, decimals=1))
         self.pres_arr = list(self.pres_arr.astype(float, copy=False))
         self.tdew_arr = list(self.tdew_arr.astype(float, copy=False))
+        self.data = {} #unsure if this will cause problem
     @Resource.data.setter
-    def data(self, data_file):
+    def data(self,data_dict):
         dic = {
             # 'site_gid': self.site_gid,
             # 'nsrdb_lat':self.nsrdb_latitude,
