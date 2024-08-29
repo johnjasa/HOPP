@@ -61,7 +61,8 @@ class HPCSolarData(Resource):
         else:
             self.nsrdb_file = NSRDB_DEP + "{}.h5".format(self.year)
         # Pull data from HPC NSRDB dataset
-        self.extract_resource()
+        # self.extract_resource()
+        self.download_resource()
 
         # Set solar resource data into SAM/PySAM digestible format
         self.format_data()
@@ -69,7 +70,8 @@ class HPCSolarData(Resource):
         # Define final dictionary
         
 
-    def extract_resource(self):
+    # def extract_resource(self):
+    def download_resource(self):
         # Define file to download from
         # NOTE: HOPP is currently calling an old deprecated version of PSM v3.1 which corresponds to /api/nsrdb/v2/solar/psm3-download
         

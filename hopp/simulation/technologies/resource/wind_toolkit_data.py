@@ -56,7 +56,8 @@ class HPCWindData(Resource):
             elif self.year == 2014:
                 self.wtk_file = WTK_V11_BASE + "{}.h5".format(self.year)
             
-        self.extract_resource()
+        # self.extract_resource()
+        self.download_resource()
         self.format_data() 
 
         self.data = {'heights': [float(h) for h in self.data_hub_heights for i in range(4)],
@@ -89,7 +90,8 @@ class HPCWindData(Resource):
 
         return heights
     
-    def extract_resource(self):
+    # def extract_resource(self):
+    def download_resource(self): 
         # Define file to download from
         # NOTE: Current setup of files on HPC WINDToolkit v1.0.0 = 2007-2013, v1.1.0 = 2014
         
