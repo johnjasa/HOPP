@@ -182,7 +182,7 @@ def setup_hopp(
     return hi
 
 
-def rerun_battery_dispatch(hybrid_plant:HybridSimulation, min_load_kW:float, max_load_kW:floats,project_life = 20):
+def rerun_battery_dispatch(hybrid_plant:HybridSimulation, min_load_kW:float, max_load_kW:float,project_life = 20):
     lifetime_sim = False
     desired_schedule = (min_load_kW/1e3)*np.ones(8760)
     
