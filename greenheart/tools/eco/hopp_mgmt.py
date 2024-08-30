@@ -27,8 +27,8 @@ def setup_hopp(
     
     if "battery" in hopp_config["technologies"].keys() and \
         ("desired_schedule" not in hopp_config["site"].keys() or hopp_config["site"]["desired_schedule"] == []):
-        minimum_load_kw = (power_for_peripherals_kw/1e3) + (greenheart_config["electrolyzer"]["turndown_ratio"]*greenheart_config["electrolyzer"]["rating"])
-        hopp_config["site"]["desired_schedule"] = [minimum_load_kw]*8760
+        minimum_load_MW = (power_for_peripherals_kw/1e3) + (greenheart_config["electrolyzer"]["turndown_ratio"]*greenheart_config["electrolyzer"]["rating"])
+        hopp_config["site"]["desired_schedule"] = [minimum_load_MW]*8760
         hopp_config["site"]["curtailment_value_type"] = "grid"
         hopp_config["technologies"]["grid"]["interconnect_kw"] = power_for_peripherals_kw + greenheart_config["electrolyzer"]["rating"]*1e3
         # TODO: make grid_min_interconnect an input?
