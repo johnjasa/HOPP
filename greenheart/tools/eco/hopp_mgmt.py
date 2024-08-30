@@ -8,7 +8,7 @@ from hopp.simulation.technologies.sites import SiteInfo
 from hopp.simulation.technologies.sites import flatirons_site as sample_site
 from hopp.simulation.hopp_interface import HoppInterface
 from hopp.simulation.technologies.layout.wind_layout_tools import create_grid
-
+from hopp.simulation.hybrid_simulation import HybridSimulation
 
 # Function to set up the HOPP model
 def setup_hopp(
@@ -181,6 +181,56 @@ def setup_hopp(
     ################ return all the inputs for hopp
     return hi
 
+
+def rerun_battery_dispatch(hybrid_plant:HybridSimulation, min_load_kW:float, max_load_kW:floats,project_life = 20):
+    lifetime_sim = False
+    desired_schedule = (min_load_kW/1e3)*np.ones(8760)
+    
+    hybrid_plant.grid.site.desired_schedule = desired_schedule
+    hybrid_plant.dispatch_builder.site.desired_schedule = desired_schedule
+    hybrid_plant.dispatch_builder.power_sources["grid"].site.desired_schedule = desired_schedule
+
+    hybrid_plant.grid.interconnect_kw = max_load_kW
+    hybrid_plant.interconnect_kw = max_load_kW
+    hybrid_plant.dispatch_builder.power_sources["grid"].interconnect_kw = max_load_kW
+
+    hybrid_plant.dispatch_builder.simulate_power()
+
+    non_dispatchable_systems = ['pv', 'wind','wave']
+    hybrid_size_kw = 0
+    hybrid_nominal_capacity = 0
+    total_gen = np.zeros(hybrid_plant.site.n_timesteps * project_life)
+    total_gen_before_battery = np.zeros(hybrid_plant.site.n_timesteps * project_life)
+    total_gen_max_feasible_year1 = np.zeros(hybrid_plant.site.n_timesteps)
+    for system in hybrid_plant.technologies.keys():
+        if system != 'grid':
+            model = getattr(hybrid_plant, system)
+            if model:
+                hybrid_size_kw += model.system_capacity_kw
+                hybrid_nominal_capacity += model.calc_nominal_capacity(max_load_kW)
+                project_life_gen = np.tile(model.generation_profile, int(project_life / (len(model.generation_profile) // hybrid_plant.site.n_timesteps)))
+                total_gen += project_life_gen
+                if system in non_dispatchable_systems:
+                    total_gen_before_battery += project_life_gen
+                total_gen += project_life_gen
+                model.gen_max_feasible = model.calc_gen_max_feasible_kwh(max_load_kW)
+                total_gen_max_feasible_year1 += model.gen_max_feasible
+    # total_gen = np.tile(hybrid_plant.wind.generation_profile, int(project_life / (len(hybrid_plant.wind.generation_profile) // hybrid_plant.site.n_timesteps)))
+    # total_gen += np.tile(hybrid_plant.pv.generation_profile, int(project_life / (len(hybrid_plant.pv.generation_profile) // hybrid_plant.site.n_timesteps)))
+    # total_gen += np.tile(hybrid_plant.battery.generation_profile, int(project_life / (len(hybrid_plant.battery.generation_profile) // hybrid_plant.site.n_timesteps)))
+
+    # hybrid_size_kw = hybrid_plant.wind.system_capacity_kw + hybrid_plant.pv.system_capacity_kw + hybrid_plant.battery.system_capacity_kw
+    hybrid_plant.grid.simulate_grid_connection(
+            hybrid_size_kw, 
+            total_gen, 
+            project_life, 
+            lifetime_sim,
+            hybrid_plant.grid.total_gen_max_feasible_year1,
+            hybrid_plant.dispatch_builder.options
+        )
+    hybrid_plant.grid.hybrid_nominal_capacity = hybrid_nominal_capacity
+    hybrid_plant.grid.total_gen_max_feasible_year1 = total_gen_max_feasible_year1
+    return hybrid_plant
 
 # Function to run hopp from provided inputs from setup_hopp()
 def run_hopp(hi, project_lifetime, verbose=False):
