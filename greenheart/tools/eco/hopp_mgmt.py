@@ -182,17 +182,17 @@ def setup_hopp(
     return hi
 
 
-def rerun_battery_dispatch(hybrid_plant:HybridSimulation, min_load_kW:float, max_load_kW:float,project_life = 20):
+def rerun_battery_dispatch(hybrid_plant:HybridSimulation, desired_schedule_kW:float, interconnection_kW:float,project_life = 20):
     lifetime_sim = False
-    desired_schedule = (min_load_kW/1e3)*np.ones(8760)
+    desired_schedule = (desired_schedule_kW/1e3)*np.ones(8760)
     
     hybrid_plant.grid.site.desired_schedule = desired_schedule
     hybrid_plant.dispatch_builder.site.desired_schedule = desired_schedule
     hybrid_plant.dispatch_builder.power_sources["grid"].site.desired_schedule = desired_schedule
 
-    hybrid_plant.grid.interconnect_kw = max_load_kW
-    hybrid_plant.interconnect_kw = max_load_kW
-    hybrid_plant.dispatch_builder.power_sources["grid"].interconnect_kw = max_load_kW
+    hybrid_plant.grid.interconnect_kw = interconnection_kW
+    hybrid_plant.interconnect_kw = interconnection_kW
+    hybrid_plant.dispatch_builder.power_sources["grid"].interconnect_kw = interconnection_kW
 
     hybrid_plant.dispatch_builder.simulate_power()
 
@@ -207,13 +207,13 @@ def rerun_battery_dispatch(hybrid_plant:HybridSimulation, min_load_kW:float, max
             model = getattr(hybrid_plant, system)
             if model:
                 hybrid_size_kw += model.system_capacity_kw
-                hybrid_nominal_capacity += model.calc_nominal_capacity(max_load_kW)
+                hybrid_nominal_capacity += model.calc_nominal_capacity(interconnection_kW)
                 project_life_gen = np.tile(model.generation_profile, int(project_life / (len(model.generation_profile) // hybrid_plant.site.n_timesteps)))
                 total_gen += project_life_gen
                 if system in non_dispatchable_systems:
                     total_gen_before_battery += project_life_gen
                 total_gen += project_life_gen
-                model.gen_max_feasible = model.calc_gen_max_feasible_kwh(max_load_kW)
+                model.gen_max_feasible = model.calc_gen_max_feasible_kwh(interconnection_kW)
                 total_gen_max_feasible_year1 += model.gen_max_feasible
     # total_gen = np.tile(hybrid_plant.wind.generation_profile, int(project_life / (len(hybrid_plant.wind.generation_profile) // hybrid_plant.site.n_timesteps)))
     # total_gen += np.tile(hybrid_plant.pv.generation_profile, int(project_life / (len(hybrid_plant.pv.generation_profile) // hybrid_plant.site.n_timesteps)))
