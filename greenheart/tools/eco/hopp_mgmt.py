@@ -215,11 +215,7 @@ def rerun_battery_dispatch(hybrid_plant:HybridSimulation, desired_schedule_kW:fl
                 total_gen += project_life_gen
                 model.gen_max_feasible = model.calc_gen_max_feasible_kwh(interconnection_kW)
                 total_gen_max_feasible_year1 += model.gen_max_feasible
-    # total_gen = np.tile(hybrid_plant.wind.generation_profile, int(project_life / (len(hybrid_plant.wind.generation_profile) // hybrid_plant.site.n_timesteps)))
-    # total_gen += np.tile(hybrid_plant.pv.generation_profile, int(project_life / (len(hybrid_plant.pv.generation_profile) // hybrid_plant.site.n_timesteps)))
-    # total_gen += np.tile(hybrid_plant.battery.generation_profile, int(project_life / (len(hybrid_plant.battery.generation_profile) // hybrid_plant.site.n_timesteps)))
 
-    # hybrid_size_kw = hybrid_plant.wind.system_capacity_kw + hybrid_plant.pv.system_capacity_kw + hybrid_plant.battery.system_capacity_kw
     hybrid_plant.grid.simulate_grid_connection(
             hybrid_size_kw, 
             total_gen, 
@@ -229,9 +225,8 @@ def rerun_battery_dispatch(hybrid_plant:HybridSimulation, desired_schedule_kW:fl
             hybrid_plant.dispatch_builder.options
         )
     hybrid_plant.grid._financial_model.value('gen', hybrid_plant.grid.generation_profile)
-    # print("Done re-running battery...")
-    # hybrid_plant.grid.hybrid_nominal_capacity = hybrid_nominal_capacity
-    # hybrid_plant.grid.total_gen_max_feasible_year1 = total_gen_max_feasible_year1
+    hybrid_plant.grid.hybrid_nominal_capacity = hybrid_nominal_capacity
+    hybrid_plant.grid.total_gen_max_feasible_year1 = total_gen_max_feasible_year1
     return hybrid_plant
 
 # Function to run hopp from provided inputs from setup_hopp()
