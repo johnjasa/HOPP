@@ -1,4 +1,4 @@
-from rex import NSRDBX
+from rex import WindX
 from rex.sam_resource import SAMResource
 import numpy as np 
 from typing import Optional, Union
