@@ -54,7 +54,7 @@ class GreenHeartSimulationConfig:
         solar_rating (Optional[float]): rating of the solar plant in MW
         battery_capacity_kw (Optional[float]): capacity of the battery in kW
         battery_capacity_kwh (Optional[float]): capacity of the battery in kWh
-        wind_rating (Optional[float]): rating of the wind plant in MW
+        wind_rating (Optional[float]): rating of the wind plant in kW
         verbose (bool): flag to print verbose output
         show_plots (bool): flag to show plots
         save_plots (bool): flag to save plots
@@ -140,13 +140,15 @@ class GreenHeartSimulationConfig:
             ] = self.solar_rating
 
         if self.battery_capacity_kw != None:
-            self.hopp_config["site"]["battery"]["flag"] = True
+            if "battery" not in self.hopp_config["technologies"]:
+                self.hopp_config["technologies"].update({"battery":{}})
             self.hopp_config["technologies"]["battery"][
                 "system_capacity_kw"
             ] = self.battery_capacity_kw
 
         if self.battery_capacity_kwh != None:
-            self.hopp_config["site"]["battery"]["flag"] = True
+            if "battery" not in self.hopp_config["technologies"]:
+                self.hopp_config["technologies"].update({"battery":{}})
             self.hopp_config["technologies"]["battery"][
                 "system_capacity_kwh"
             ] = self.battery_capacity_kwh
@@ -155,13 +157,15 @@ class GreenHeartSimulationConfig:
             self.greenheart_config["h2_storage"]["type"] = self.storage_type
 
         if self.wind_rating != None:
-            self.orbit_config["plant"]["capacity"] = int(self.wind_rating * 1e-3)
-            self.orbit_config["plant"]["num_turbines"] = int(
-                self.wind_rating * 1e-3 / self.turbine_config["turbine_rating"]
-            )
+            n_turbines = int(self.wind_rating*1e-3/self.turbine_config["turbine_rating"])
+            #for the 1e-3 to be applied - wind_rating has to be in kW
+            
+            if self.orbit_config != None:
+                self.orbit_config["plant"]["capacity"] = int(self.wind_rating * 1e-3)
+                self.orbit_config["plant"]["num_turbines"] = n_turbines
             self.hopp_config["technologies"]["wind"][
                 "num_turbines"
-            ] = self.orbit_config["plant"]["num_turbines"]
+            ] = n_turbines
 
         if self.grid_connection != None:
             self.greenheart_config["project_parameters"][
