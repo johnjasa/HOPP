@@ -17,7 +17,9 @@ from hopp.simulation.technologies.resource import (
     SolarResource,
     WindResource,
     WaveResource,
-    ElectricityPrices
+    ElectricityPrices,
+    HPCWindData,
+    HPCSolarData,
 )
 from hopp.tools.layout.plot_tools import plot_shape
 from hopp.utilities.log import hybrid_logger as logger
@@ -80,6 +82,8 @@ class SiteInfo(BaseClass):
     wave: bool = field(default=False)
     renewable_resource_origin: str = field(default="API", validator=contains(["API", "HPC"]))
     wind_resource_origin: str = field(default="WTK", validator=contains(["WTK", "TAP"]))
+    solar_resource: Optional[Union[SolarResource,HPCSolarData]] = field(default=None)
+    wind_resource: Optional[Union[WindResource,HPCWindData]] = field(default=None)
 
     # Set in post init hook
     n_timesteps: int = field(init=False, default=None)
@@ -87,8 +91,7 @@ class SiteInfo(BaseClass):
     lon: hopp_float_type = field(init=False)
     year: int = field(init=False, default=2012)
     tz: Optional[int] = field(init=False, default=None)
-    solar_resource: Optional[SolarResource] = field(init=False, default=None)
-    wind_resource: Optional[WindResource] = field(init=False, default=None)
+    
     wave_resoure: Optional[WaveResource] = field(init=False, default=None)
     elec_prices: Optional[ElectricityPrices] = field(init=False, default=None)
     n_periods_per_day: int = field(init=False)
@@ -138,29 +141,32 @@ class SiteInfo(BaseClass):
 
         if 'year' not in data:
             data['year'] = 2012
+        
+        self.year = data["year"]
+
         if 'tz' in data:
             self.tz = data['tz']
         
         if self.solar:
-            if self.renewable_resource_origin=="API":
-                self.solar_resource = SolarResource(data['lat'], data['lon'], data['year'], path_resource=self.path_resource, filepath=self.solar_resource_file)
-            else:
-                from hopp.simulation.technologies.resource.nsrdb_data import HPCSolarData
-                self.solar_resource = HPCSolarData(data['lat'], data['lon'], data['year'],nsrdb_source_path = self.nsrdb_source_path, filepath=self.solar_resource_file)
+            if self.solar_resource is None:
+                if self.renewable_resource_origin=="API":
+                    self.solar_resource = SolarResource(data['lat'], data['lon'], data['year'], path_resource=self.path_resource, filepath=self.solar_resource_file)
+                else:
+                    self.solar_resource = HPCSolarData(data['lat'], data['lon'], data['year'],nsrdb_source_path = self.nsrdb_source_path, filepath=self.solar_resource_file)
             self.n_timesteps = len(self.solar_resource.data['gh']) // 8760 * 8760
         if self.wave:
             self.wave_resource = WaveResource(data['lat'], data['lon'], data['year'], path_resource=self.path_resource, filepath = self.wave_resource_file)
             self.n_timesteps = 8760
 
         if self.wind:
+            if self.wind_resource is None:
             # TODO: allow hub height to be used as an optimization variable
-            if self.renewable_resource_origin=="API":
-                self.wind_resource = WindResource(data['lat'], data['lon'], data['year'], wind_turbine_hub_ht=self.hub_height,
-                                                path_resource=self.path_resource, filepath=self.wind_resource_file, source=self.wind_resource_origin)
-            else:
-                from hopp.simulation.technologies.resource.wind_toolkit_data import HPCWindData
-                self.wind_resource = HPCWindData(data['lat'], data['lon'], data['year'], hub_height_meters=self.hub_height,
-                                                wtk_source_path=self.wtk_source_path, filepath=self.wind_resource_file)
+                if self.renewable_resource_origin=="API":
+                    self.wind_resource = WindResource(data['lat'], data['lon'], data['year'], wind_turbine_hub_ht=self.hub_height,
+                                                    path_resource=self.path_resource, filepath=self.wind_resource_file, source=self.wind_resource_origin)
+                else:
+                    self.wind_resource = HPCWindData(data['lat'], data['lon'], data['year'], hub_height_meters=self.hub_height,
+                                                    wtk_source_path=self.wtk_source_path, filepath=self.wind_resource_file)
             n_timesteps = len(self.wind_resource.data['data']) // 8760 * 8760
             if self.n_timesteps is None:
                 self.n_timesteps = n_timesteps
