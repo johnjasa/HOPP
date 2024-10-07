@@ -29,7 +29,12 @@ def combine_cluster_annual_performance_info(h2_tot):
    for k in performance_metrics:
       vals = np.zeros(n_years)
       for c in clusters:
-         vals += np.array(list(h2_tot.loc['Performance By Year'].loc[c][k].values()))
+         t_val = np.array(list(h2_tot.loc['Performance By Year'].loc[c][k].values()))
+         if any(np.isnan(t_val)):
+            hm = np.argwhere(np.isnan(t_val)).flatten()
+            # print("cluster {} has {} nan vals for {}".format(c,len(hm),k))
+         else:
+            vals += t_val #np.array(list(h2_tot.loc['Performance By Year'].loc[c][k].values()))
          # vals += np.array(h2_tot.loc['Performance By Year'].loc[c][k].values())
       
       if k in vals_to_average:
