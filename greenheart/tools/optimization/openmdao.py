@@ -62,6 +62,8 @@ class GreenHeartComponent(om.ExplicitComponent):
             self.add_output("lcos", units="USD/t", val=0.0, desc="levelized cost of steel")
         if "ammonia" in self.options["config"].greenheart_config.keys():
             self.add_output("lcoa", units="USD/kg", val=0.0, desc="levelized cost of ammonia")
+        if "dri" in self.options["config"].greenheart_config.keys():
+            self.add_output("lcodri", units="USD/t", val=0.0, desc="levelized cost of DRI")
 
         if self.options["config"].greenheart_config["opt_options"]["constraints"]["pv_to_platform_area_ratio"]["flag"]:
 
@@ -105,7 +107,7 @@ class GreenHeartComponent(om.ExplicitComponent):
         elif config.output_level == 6:
             hopp_results, electrolyzer_physics_results, remaining_power_profile = run_simulation(config)
         elif config.output_level == 7:
-            lcoe, lcoh, steel_finance, ammonia_finance = run_simulation(config)
+            lcoe, lcoh, steel_finance, ammonia_finance, dri_finance = run_simulation(config)
         elif config.output_level == 8:
             greenheart_output = run_simulation(config)
             lcoe = greenheart_output.lcoe
@@ -122,7 +124,8 @@ class GreenHeartComponent(om.ExplicitComponent):
             outputs["lcos"] = steel_finance.sol.get("price")
         if "ammonia" in self.options["config"].greenheart_config.keys():
             outputs["lcoa"] = ammonia_finance.sol.get("price")
-
+        if "dri" in self.options["config"].greenheart_config.keys():
+            outputs["lcodri"] = dri_finance.sol.get("price")
         if self.options["config"].greenheart_config["opt_options"]["constraints"]["pv_to_platform_area_ratio"]["flag"]:
             outputs["pv_area"] = pv_area
             outputs["platform_area"] = platform_area
