@@ -7,7 +7,9 @@ import PySAM.Pvwattsv8 as pv_simple
 from hopp.tools.utils import flatten_dict
 
 # PVWatts default module
-# pvmismatch standard module description
+# pvmismatch standard module description - Mark Mikofski, Bennet Meyers, Chetan Chaudhari (2018). “PVMismatch Project: https://github.com/SunPower/PVMismatch”. SunPower Corporation, Richmond, CA.
+# pvmismatch.pvmismatch_lib.pvmodule.STD96 
+# https://github.com/SunPower/PVMismatch/blob/b391a98c5ded478a73b3c6a08e8de89024be5156/pvmismatch/pvmismatch_lib/pvmodule.py#L66
 cell_len = 0.124
 cell_rows = 12
 cell_cols = 8
