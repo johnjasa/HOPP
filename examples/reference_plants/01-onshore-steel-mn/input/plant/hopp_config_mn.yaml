@@ -8,14 +8,14 @@ site: #!include flatirons_site.yaml
     site_boundaries: 
       verts:  
         - [0.0, 0.0]
-        - [0.0, 20000.0]
-        - [20000.0, 20000.0]
-        - [20000.0, 0.0] 
+        - [0.0, 25000]
+        - [25000, 25000]
+        - [25000, 0.0] 
       verts_simple: 
         - [0.0, 0.0]
-        - [0.0, 20000.0]
-        - [20000.0, 20000.0]
-        - [20000.0, 0.0]
+        - [0.0, 25000]
+        - [25000, 25000]
+        - [25000, 0.0]
   solar_resource_file: "input/weather/solar/47.5233_-92.5366_psmv3_60_2013.csv"
   wind_resource_file: "input/weather/wind/47.5233_-92.5366_windtoolkit_2013_60min_100m_120m.srw"
   wave_resource_file: ""
@@ -30,19 +30,20 @@ site: #!include flatirons_site.yaml
 
 technologies:
   wind:
-    num_turbines: 216
+    num_turbines: 84 #216 #84 # #216 
     turbine_rating_kw: 6000.0
     model_name: floris
     timestep: [0, 8760]
     floris_config: input_files/floris/floris_input_lbw_6MW.yaml
     fin_model: !include default_fin_config.yaml
   pv:
-    system_capacity_kw: 100000
+    system_capacity_kw: 600000 #600000 #1500000
     dc_degradation: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     fin_model: !include default_fin_config.yaml
+    panel_tilt_angle: "lat-func"
   battery:
-    system_capacity_kwh: 100000
-    system_capacity_kw: 100000
+    system_capacity_kwh: 150300.0 #375745.2 #150300.0
+    system_capacity_kw: 150300.0 #375740.4 #150300.0
     minimum_SOC: 20.0
     maximum_SOC: 100.0
     initial_SOC: 90.0

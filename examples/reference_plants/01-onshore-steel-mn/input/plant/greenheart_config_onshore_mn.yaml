@@ -1,6 +1,8 @@
 site:
   mean_windspeed: False 
   depth: 0 #m
+  distance_to_storage_km: 50
+  feedstock_regio: "US Average"
   wind_layout:
     row_spacing: 5  # Also defined in ORBIT config for offshore layout. Greenheart config values override the values in ORBIT.
     turbine_spacing: 5 # Also defined in ORBIT config for offshore layout. Greenheart config values override the values in ORBIT.
@@ -53,14 +55,16 @@ finance_parameters:
       none: 2022 # arbitrary
     h2_pipe_array: 2018 # ANL costs
     h2_transport_pipeline: 2018 # same model for costs as the h2_pipe_array
+    electricity_ptc: 1992
+    h2_ptc: 2022
   wind:
     expected_plant_cost: 'none'
 electrolyzer:
   sizing:
-    resize_for_enduse: False
-    size_for: 'BOL' #'BOL' (generous) or 'EOL' (conservative)
+    resize_for_enduse: True
+    size_for: 'EOL' #'BOL' (generous) or 'EOL' (conservative)
     hydrogen_dmd: 
-  rating: 1160 # MW 
+  rating: 1120 # MW 
   cluster_rating_MW: 40
   pem_control_type: 'basic'
   eol_eff_percent_loss: 13 #eol defined as x% change in efficiency from bol
