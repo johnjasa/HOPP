@@ -24,6 +24,12 @@ from greenheart.simulation.technologies.steel.steel import (
     SteelFinanceModelOutputs,
     SteelCapacityModelOutputs
 )
+from greenheart.simulation.technologies.steel.dri import (
+    run_dri_full_model,
+    DRICostModelOutputs,
+    DRIFinanceModelOutputs,
+    DRICapacityModelOutputs
+)
 
 # visualization imports
 import matplotlib.pyplot as plt
@@ -237,6 +243,11 @@ class GreenHeartSimulationOutput:
     steel_costs: Optional[SteelCostModelOutputs] = field(default=None)
     steel_finance: Optional[SteelFinanceModelOutputs] = field(default=None)
 
+    dri_capacity: Optional[DRICapacityModelOutputs] = field(default=None)
+    dri_costs: Optional[DRICostModelOutputs] = field(default=None)
+    dri_finance: Optional[DRIFinanceModelOutputs] = field(default=None)
+    dri_profast: Optional[ProFAST] = field(default=None)
+    
     ammonia_capacity: Optional[AmmoniaCapacityModelOutputs] = field(default=None)
     ammonia_costs: Optional[AmmoniaCostModelOutputs] = field(default=None)
     ammonia_finance: Optional[AmmoniaFinanceModelOutputs] = field(default=None)
@@ -995,9 +1006,36 @@ def run_simulation(config: GreenHeartSimulationConfig):
                 ] = hydrogen_amount_kgpy
 
             steel_capacity, steel_costs, steel_finance = run_steel_full_model(steel_config, save_plots=config.save_plots, show_plots=config.show_plots, output_dir=config.output_dir, design_scenario_id=config.design_scenario["id"])
-
         else:
             steel_finance = {}
+
+        if "dri" in config.greenheart_config:
+            dri_config = copy.deepcopy(config.greenheart_config)
+            if config.verbose:
+                print("Running dri\n")
+
+            # use lcoh from the electrolyzer model if it is not already in the config
+            if "lcoh" not in dri_config["dri"]["finances"]:
+                dri_config["dri"]["finances"]["lcoh"] = lcoh
+
+            # use lcoh from the electrolyzer model if it is not already in the config
+            if "lcoh" not in dri_config["dri"]["costs"]:
+                dri_config["dri"]["costs"]["lcoh"] = lcoh
+
+            # use the hydrogen amount from the electrolyzer physics model if it is not already in the config
+            if (
+                "hydrogen_amount_kgpy"
+                not in dri_config["dri"]["capacity"]
+            ):
+                dri_config["dri"]["capacity"][
+                    "hydrogen_amount_kgpy"
+                ] = hydrogen_amount_kgpy
+
+            dri_capacity, dri_costs, dri_finance = run_dri_full_model(dri_config, save_plots=config.save_plots, show_plots=config.show_plots, output_dir=config.output_dir, design_scenario_id=config.design_scenario["id"])
+        else:
+            dri_finance = {}
+
+        
 
         if "ammonia" in config.greenheart_config:
             ammonia_config = copy.deepcopy(config.greenheart_config)
@@ -1082,7 +1120,9 @@ def run_simulation(config: GreenHeartSimulationConfig):
     elif config.output_level == 6:
         return hopp_results, electrolyzer_physics_results, remaining_power_profile
     elif config.output_level == 7:
-        return lcoe, lcoh, steel_finance, ammonia_finance
+        return lcoe, lcoh, steel_finance, ammonia_finance, dri_finance
+    elif config.output_level == 9:
+        return hopp_results, electrolyzer_physics_results, remaining_power_profile,lcoh,dri_finance
     elif config.output_level == 8:
         return GreenHeartSimulationOutput(
             config,
@@ -1118,6 +1158,9 @@ def run_simulation(config: GreenHeartSimulationConfig):
             steel_capacity = None if "steel" not in config.greenheart_config else steel_capacity, 
             steel_costs = None if "steel" not in config.greenheart_config else steel_costs, 
             steel_finance = None if "steel" not in config.greenheart_config else steel_finance,
+            dri_capacity = None if "dri" not in config.greenheart_config else dri_capacity, 
+            dri_costs = None if "dri" not in config.greenheart_config else dri_costs, 
+            dri_finance = None if "dri" not in config.greenheart_config else dri_finance,
             ammonia_capacity = (
                 None
                 if "ammonia" not in config.greenheart_config
