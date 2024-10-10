@@ -44,13 +44,13 @@ class Floris(BaseClass):
         self.wind_resource_data = self.site.wind_resource.data
         self.speeds, self.wind_dirs = self.parse_resource_data()
 
-        save_data = np.zeros((len(self.speeds),2))
-        save_data[:,0] = self.speeds
-        save_data[:,1] = self.wind_dirs
+        # save_data = np.zeros((len(self.speeds),2))
+        # save_data[:,0] = self.speeds
+        # save_data[:,1] = self.wind_dirs
 
-        with open('speed_dir_data.csv', 'w', newline='') as fo:
-            writer = csv.writer(fo)
-            writer.writerows(save_data)
+        # with open('speed_dir_data.csv', 'w', newline='') as fo:
+        #     writer = csv.writer(fo)
+        #     writer.writerows(save_data)
 
         self.wind_farm_xCoordinates = self.fi.layout_x
         self.wind_farm_yCoordinates = self.fi.layout_y
@@ -119,7 +119,7 @@ class Floris(BaseClass):
 
     def execute(self, project_life):
 
-        print('Simulating wind farm output in FLORIS...')
+        # print('Simulating wind farm output in FLORIS...')
 
         # find generation of wind farm
         power_turbines = np.zeros((self.nTurbs, 8760))
@@ -129,7 +129,11 @@ class Floris(BaseClass):
         self.fi.calculate_wake()
 
         power_turbines[:, self.start_idx:self.end_idx] = self.fi.get_turbine_powers().reshape((self.nTurbs, self.end_idx - self.start_idx))
+        # farm_power = self.fi.get_farm_power()
+        # farm_power = farm_power.sum(axis=2).flatten()
         power_farm[self.start_idx:self.end_idx] = self.fi.get_farm_power().reshape((self.end_idx - self.start_idx))
+        power_farm = np.nan_to_num(power_farm)
+        power_turbines = np.nan_to_num(power_turbines)
 
         # Adding losses from PySAM defaults (excluding turbine and wake losses)
         self.gen = power_farm * ((100 - self._operational_losses)/100) / 1000 # kW

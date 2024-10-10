@@ -86,7 +86,7 @@ class WindPlant(PowerSource):
         self._rating_range_kw = self.config.rating_range_kw
 
         if self.config.model_name == 'floris':
-            print('FLORIS is the system model...')
+            # print('FLORIS is the system model...')
             system_model = Floris(self.site, self.config)
             financial_model = Singleowner.default(self.config_name)
         else:
