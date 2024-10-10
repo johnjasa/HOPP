@@ -651,7 +651,7 @@ class PEM_H2_Clusters:
         returns:: 
             V_act [V/cell]: anode and cathode activation overpotential
 
-        Reference:
+        Reference: http://dx.doi.org/10.1016/j.ijhydene.2016.06.022
         
         """
         T_K=Stack_T+ 273.15 
@@ -883,6 +883,19 @@ if __name__ == "__main__":
     }
     # Create PEM and initialize parameters
     pem = PEM_H2_Clusters(cluster_size_mw, plant_life,**electrolyzer_model_parameters)
+    V_bol = pem.output_dict['BOL Efficiency Curve Info']['Cell Voltage'].values
+    i_bol = pem.output_dict['BOL Efficiency Curve Info']['Current'].values
+    H2_bol = pem.output_dict['BOL Efficiency Curve Info']['H2 Produced'].values
+    d_steady_V_pr_hr = pem.dt*pem.steady_deg_rate*V_bol
+    power_increase_kWh_d_steady_deg_pr_hr = d_steady_V_pr_hr*i_bol*pem.N_cells/(1000)
+    d_steady_deg_eff_inc_pr_hr = power_increase_kWh_d_steady_deg_pr_hr/H2_bol
+    
+    power_increase_kWh_d_onoff = pem.onoff_deg_rate*i_bol*pem.N_cells/(1000)
+    d_onoff_deg_eff_inc_pr_hr = power_increase_kWh_d_onoff/H2_bol
+
+    avg_d_steady_deg_eff_inc_pr_hr = np.mean(d_steady_deg_eff_inc_pr_hr)
+    avg_d_onoff_deg_eff_inc_pr_hr = np.mean(d_onoff_deg_eff_inc_pr_hr)
+
     # ----- Run off-grid case -----
     # Make a mock input power signal
     hours_in_year = 8760
