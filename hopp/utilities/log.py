@@ -24,7 +24,7 @@ formatter = logging.Formatter('%(name)-12s: %(levelname)-8s %(message)s')
 run_suffix = '_' + datetime.now().isoformat().replace(':', '.')
 log_path = Path.cwd() / "log"
 if not os.path.isdir(log_path):
-    os.mkdir(log_path)
+    os.makedirs(log_path,exist_ok = True)
 log_path = log_path / ("hybrid_systems" + run_suffix + ".log")
 print(log_path)
     # logging.basicConfig(level=logging_level,
