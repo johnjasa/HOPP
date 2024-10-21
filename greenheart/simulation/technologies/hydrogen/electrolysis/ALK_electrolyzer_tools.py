@@ -56,9 +56,9 @@ def get_efficiency_curve(alk: ALK_Clusters,file_desc = "test"):
     H2_cell = np.zeros(len(current_range)) #kg/hr
 
     for ii,I_stack in enumerate(current_range):
-        current_density[ii] = alk.calc_current_density(alk.T_stack, I_stack)
+        current_density[ii] = alk.calc_current_density(I_stack, alk.T_stack)
         V_cell[ii] = alk.cell_design(alk.T_stack,I_stack)
-        H2_cell[ii] = alk.cell_H2_production_rate(alk.T_stack,I_stack)
+        H2_cell[ii] = alk.cell_H2_production_rate(I_stack, alk.T_stack)
     H2_stack = H2_cell*alk.n_cells
     Stack_Power_kW = current_range*V_cell*alk.n_cells/1e3
     power_usage_kWh = current_range*V_cell/1e3
