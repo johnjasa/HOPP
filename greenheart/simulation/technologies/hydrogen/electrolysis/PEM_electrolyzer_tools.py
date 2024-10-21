@@ -34,9 +34,9 @@ def get_efficiency_curve(pem: PEM_Clusters,file_desc = "test",save_file = True):
     H2_cell = np.zeros(len(current_range)) #kg/hr
 
     for ii,I_stack in enumerate(current_range):
-        current_density[ii] = pem.calc_current_density(pem.T_stack, I_stack)
+        current_density[ii] = pem.calc_current_density(I_stack)
         V_cell[ii] = pem.cell_design(pem.T_stack,I_stack)
-        H2_cell[ii] = pem.cell_H2_production_rate(pem.T_stack,I_stack)
+        H2_cell[ii] = pem.cell_H2_production_rate(I_stack)
     H2_stack = H2_cell*pem.n_cells
     Stack_Power_kW = current_range*V_cell*pem.n_cells/1e3
     power_usage_kWh = current_range*V_cell/1e3
