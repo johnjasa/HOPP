@@ -415,17 +415,22 @@ class ElectrolyzerCluster(object):
         # 1. check ramp rate
         I_stack_nom = self.check_ramp_rate(I_stack_nom)
         self.add_simulation_results("I_stack_nom", I_stack_nom, True)
+
         # 2. calculate cluster on/off status (0: off, 1: on)
         cluster_status = self.calc_cluster_status(I_stack_nom)
         self.add_simulation_results("Cluster Status", cluster_status, True)
+
         # 3. calculate hydrogen warm-up loss multipler
         h2_multiplier = self.cluster_warm_up_losses(cluster_status)
+
         # 4. calculate un-degraded cell voltage based on nominal current
         V_cell_nom = self.cell_design(self.T_stack, I_stack_nom)
         self.add_simulation_results("V_cell", V_cell_nom, True)
+
         # 5. calculate cell degradation degradation
         V_deg = self.cell_degradation(V_cell_nom, cluster_status)
         self.add_simulation_results("V_deg", V_deg, True)
+
         # 6. calculate degraded current
         if self.penalize_hydrogen_production:
             I_stack = self.stack_degraded_current(I_stack_nom, V_cell_nom, V_deg)
@@ -433,6 +438,7 @@ class ElectrolyzerCluster(object):
         else:
             I_stack = np.copy(I_stack_nom)
             self.add_simulation_results("I_stack_deg", I_stack, True)
+
         # 7. calculate nominal hydrogen production
         if self.electrolyzer_type == "PEM":
             hydrogen_produced_kg_nom = (
@@ -444,6 +450,7 @@ class ElectrolyzerCluster(object):
                 * self.n_cells
                 * self.n_stacks
             )
+
         # 8. apply hydrogen losses to hydrogen production
         hydrogen_produced_kg = hydrogen_produced_kg_nom * h2_multiplier
         self.add_simulation_results(
@@ -452,6 +459,7 @@ class ElectrolyzerCluster(object):
         self.add_simulation_results(
             "Hydrogen Production [kg]", hydrogen_produced_kg, True
         )
+
         # 9. calculate actual power consumption
         power_consumed_kW = (
             I_stack * (V_cell_nom + V_deg) * self.n_cells * self.n_stacks
@@ -460,12 +468,14 @@ class ElectrolyzerCluster(object):
             "Total Power Usage [kW/sim]", np.sum(power_consumed_kW), False
         )
         self.add_simulation_results("Power Usage [kW]", power_consumed_kW, True)
+
         # 10. calculate hydrogen losses
         hydrogen_losses_kg = hydrogen_produced_kg_nom - hydrogen_produced_kg
         self.add_simulation_results(
             "Total Hydrogen Losses [kg/sim]", np.sum(hydrogen_losses_kg), False
         )
         self.add_simulation_results("Hydrogen Losses [kg]", hydrogen_losses_kg, True)
+
         # 11. run additional post-processing
         # calculate_efficiency()
         time_between_replacement_hours = self.estimate_time_between_replacement(V_deg)
@@ -720,11 +730,6 @@ class ElectrolyzerCluster(object):
 
         return I_deg
 
-    def stack_degraded_power(self, I_nom, V_init, V_deg):
-        # power increase - same current
-        P_deg_kW = I_nom * (V_init + V_deg) * self.n_cells / 1e3
-        return P_deg_kW
-
     # ---------------------------------- #
     # ----- CELL - LEVEL EQUATIONS ----- #
     # ---------------------------------- #
@@ -798,6 +803,7 @@ class ElectrolyzerCluster(object):
             self.BOL_design_info.update({"Feedstock Usage: Liters H2O/kg-H2": 10})
 
     def cell_bubble_rate_coverage(self, T_stack, I_stack):
+        # JJ: eqs 14 and 15?
         T_k = convert_temperature([T_stack], "C", "K")[0]
         T_amb = convert_temperature([25], "C", "K")[0]
         J_lim = 30  # [A/cm^2] [Vogt,Balzer 2005]
@@ -826,7 +832,6 @@ class ElectrolyzerCluster(object):
     # ----- CELL VOLTAGE EQUATIONS ----- #
     # ---------------------------------- #
     def cell_design(self, T_stack, I_stack):
-
         V_rev = self.cell_reversible_overpotential(T_stack)
         V_act_a, V_act_c = self.cell_activation_overpotential(T_stack, I_stack)
         V_ohm = self.cell_ohmic_overpotential(T_stack, I_stack)
@@ -855,6 +860,7 @@ class ElectrolyzerCluster(object):
 
     def cell_calc_Urev(self, T_stack):
         # UNUSED RIGHT NOW BUT SHOULD REPLACE cell_reversible_overpotential
+        # JJ: replace now?
         T_K = convert_temperature([T_stack], "C", "K")[0]
         Urev0 = self.cell_Urev0()
         p_H2O_sat_atm = self.arden_buck(T_stack)
@@ -936,6 +942,8 @@ class ElectrolyzerCluster(object):
     def cell_Urev0(self):
         # http://dx.doi.org/10.1016/j.ijhydene.2017.03.046
         # Urev0 = (self.gibbs / (2 * self.F)) - (0.9*1e-3)*(T_K-298)
+        # JJ: eq 11
+        # JJ: sign issue?
         return self.gibbs / (2 * self.F)
 
     def cell_Utn(self):
@@ -967,12 +975,14 @@ class ElectrolyzerCluster(object):
             gamma_a = 1.25  # anode roughness factor
             gamma_c = 1.05  # cathode roughness factor
             # Eqn 16
+            # JJ: eq 16
             j0c = (
                 gamma_c
                 * jref_0c
                 * np.exp((-1 * delta_Gc / R) * ((1 / T_cathode) - (1 / Tref)))
             )
             # Eqn 16
+            # JJ: eq 17
             j0a = (
                 gamma_a
                 * jref_0a
@@ -984,7 +994,6 @@ class ElectrolyzerCluster(object):
             bc = (R * T_anode) / (self.z * self.F * alpha_c)
 
             if isinstance(I_stack, (float, int)):
-
                 if j_eff > 0:
                     # Eqn 11 - anode activation energy
                     V_act_a = ba * np.maximum(0, np.log(ja / j0a))
@@ -1040,6 +1049,7 @@ class ElectrolyzerCluster(object):
             return V_ohm
 
     def cell_total_resistance(self, T_stack, I_stack=None):
+        # JJ: eq 13
         if self.electrolyzer_type == "ALK":
             R_a, R_c = self.cell_electrode_resistance(T_stack)
             R_electrode = R_a + R_c
@@ -1207,7 +1217,6 @@ class ElectrolyzerCluster(object):
     # ----- CELL OUTPUT EQUATIONS ----- #
     # --------------------------------- #
     def calc_faradaic_efficiency(self, I_stack, T_stack=None):
-        # updated for PEM
         f1 = 250  # [mA^2/cm^4]
         if self.electrolyzer_type == "ALK":
             f2 = 0.96
@@ -1248,7 +1257,6 @@ class ElectrolyzerCluster(object):
         return np.nan_to_num(I_reqd)
 
     def estimate_cell_degradation_from_demand(self, H2_required_cluster_kg):
-
         H2_required_per_stack_kg = H2_required_cluster_kg / self.n_stacks
         I_reqd = self.stack_reverse_faradays(H2_required_per_stack_kg)
         V_reqd = self.cell_design(self.T_stack, I_reqd)
@@ -1265,11 +1273,4 @@ class ElectrolyzerCluster(object):
                 idx_dead = np.argwhere(V_deg > self.d_eol)[0][0]
                 V_deg = V_deg[0:idx_dead]
 
-        # P_reqd_per_hr_stack=I_reqd*(V_reqd + V_deg)*self.n_cells/1000 #kW
-        # P_required_per_hr_system=self.n_stacks*P_reqd_per_hr_stack #kW
-
         return V_deg
-
-    # ------------------------------------ #
-    # ----- ANALYSIS/POST-PROCESSING ----- #
-    # ------------------------------------ #
