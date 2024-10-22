@@ -194,7 +194,6 @@ class ElectrolyzerCluster(object):
         return onoff_deg_rate
 
     def reset_uptime_degradation_rate(self, uptime_hours_until_eol):
-
         steady_deg_rate = self.d_eol / (
             self.V_cell_nominal * uptime_hours_until_eol * 3600
         )
