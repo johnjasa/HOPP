@@ -139,7 +139,12 @@ class ElectrolyzerCluster(object):
             self.cell_area = 1920  # [cm^2] membrane and electrode area
             self.e_m = 0.018  # [cm] membrane thickness - check if used
             self.rate_fatigue = 3.33330244e-07  # multiply by rf_track
-        else:
+        elif self.electrolyzer_type == "SOEC":
+            # add SOEC here
+            self.nominal_current_density = 0.5  # [A/cm^2]
+            self.fuel_pressure = 1.01325  # [bar]
+            self.sweep_pressure = 1.01325  # [bar]
+        elif self.electrolyzer_type == "ALK":
             self.nominal_current_density = 0.4  # [A/cm^2]
             self.pressure_operating = 1  # bar
             T_stack = 60  # Celsius
@@ -154,7 +159,12 @@ class ElectrolyzerCluster(object):
             self.w_koh = 30  # [wt. %] can range from [25-33]
             # self.electrolyte_concentration_percent = self.w_koh / 100
             self.rate_fatigue = 1.2820512820512823e-05  # multiply by rf_track
-
+        else:
+            # raise error, say which types are okay
+            raise ValueError(
+                "Invalid electrolyzer type. Choose from 'PEM', 'ALK', 'SOEC'"
+            )
+            
         # CLUSTER DESIGN PARAMETERS
         # ASSUMES THAT STACK IS 1 MW THEREFORE n_stacks = cluster_size_mw
         self.n_stacks = cluster_size_mw
@@ -173,6 +183,7 @@ class ElectrolyzerCluster(object):
             self.feedstock_usage()
         else:
             self.m, self.M = self.create_electrolyte()
+
         self.system_design(T_stack)
         self.curve_coeff = self.create_power_current_curve(T_stack)
 
@@ -309,6 +320,32 @@ class ElectrolyzerCluster(object):
     # ----- OPERATIONAL CONSTRAINTS & LOSSES ----- #
     # -------------------------------------------- #
     def initalize_outputs(self, plant_life: int, run_LTA: bool, debug_mode: bool):
+        """
+        Initialize the output structures for the electrolyzer simulation.
+
+        Parameters
+        ----------
+        plant_life : int
+            The operational life of the plant in years.
+        run_LTA : bool
+            Flag to determine if Long-Term Analysis (LTA) should be performed.
+        debug_mode : bool
+            Flag to determine if debug mode is enabled, which includes additional
+            timeseries keys for debugging purposes.
+        Attributes
+        ----------
+        LTA_results_annual : pandas.DataFrame
+            DataFrame to store annual results for Long-Term Analysis (LTA) if `run_LTA` is True.
+        LTA_results_average : dict
+            Dictionary to store average results for Long-Term Analysis (LTA) if `run_LTA` is True.
+        simulation_results : dict
+            Dictionary to store simulation results.
+        BOL_design_info : dict
+            Dictionary to store Beginning of Life (BOL) design information.
+        timeseries_results : dict
+            Dictionary to store timeseries results with keys based on the simulation mode
+            (normal, LTA, or debug).
+        """
 
         timeseries_keys = [
             "Hydrogen Production [kg]",
@@ -734,6 +771,19 @@ class ElectrolyzerCluster(object):
     # ---------------------------------- #
 
     def create_electrolyte(self):
+        """
+        Creates an electrolyte solution and calculates its molality and molarity.
+        This method calculates the molality and molarity of an electrolyte solution
+        based on the weight percentage of potassium hydroxide (KOH) in the solution.
+        It assumes a total solution weight of 1000 grams and uses the densities of
+        water and KOH to determine the volumes of the solute and solvent.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the molality (mol/kg) and molarity (mol/L) of the
+            electrolyte solution.
+        """
         electrolyte_concentration_percent = self.w_koh / 100
         solution_weight_g = 1000
         density_of_water = 1  # [g/mL] #TODO: could be temperature dependent
@@ -831,10 +881,11 @@ class ElectrolyzerCluster(object):
     # ----- CELL VOLTAGE EQUATIONS ----- #
     # ---------------------------------- #
     def cell_design(self, T_stack, I_stack):
+        # JJ: eqn 11
         V_rev = self.cell_reversible_overpotential(T_stack)
-        V_act_a, V_act_c = self.cell_activation_overpotential(T_stack, I_stack)
+        V_act = self.cell_activation_overpotential(T_stack, I_stack)
         V_ohm = self.cell_ohmic_overpotential(T_stack, I_stack)
-        V_cell = V_rev + V_ohm + V_act_a + V_act_c  # Eqn 4
+        V_cell = V_rev + V_ohm + V_act  # Eqn 4
 
         V_cell = np.nan_to_num(V_cell)
         return V_cell
@@ -1016,7 +1067,7 @@ class ElectrolyzerCluster(object):
                     V_act_a = ba * np.maximum(0, np.log(ja / j0a))
                     V_act_c = bc * np.maximum(0, np.log(jc / j0c))
 
-            return V_act_a, V_act_c
+            return V_act_a + V_act_c
         else:
             # updated for PEM
             # validated against Figure 5 of Reference
@@ -1033,14 +1084,14 @@ class ElectrolyzerCluster(object):
             i_o_c = 2 * (10 ** (-3))
             V_act_a = ((self.R * T_K) / (a_a * self.F)) * np.arcsinh(i / (2 * i_o_a))
             V_act_c = ((self.R * T_K) / (a_c * self.F)) * np.arcsinh(i / (2 * i_o_c))
-            return V_act_a, V_act_c
+            return V_act_a + V_act_c
 
     def cell_ohmic_overpotential(self, T_stack, I_stack):
         if self.electrolyzer_type == "ALK":
             R_tot = self.cell_total_resistance(T_stack, I_stack)  # Ohms
             V_ohm = I_stack * R_tot  # [V/cell]
             return V_ohm
-        else:
+        elif self.electrolyzer_type == "PEM" or self.electrolyzer_type == "SOEC":
             # updated for PEM
             R_tot = self.cell_total_resistance(T_stack)  # Ohms
             i = self.calc_current_density(I_stack)
@@ -1049,18 +1100,16 @@ class ElectrolyzerCluster(object):
 
     def cell_total_resistance(self, T_stack, I_stack=None):
         # JJ: eq 13
-        if self.electrolyzer_type == "ALK":
-            R_a, R_c = self.cell_electrode_resistance(T_stack)
-            R_electrode = R_a + R_c
-            R_ele_bf, R_ele_b = self.cell_electrolyte_resistance(
+        if self.electrolyzer_type == "ALK" or self.electrolyzer_type == "SOEC":
+            R_electrode = self.cell_electrode_resistance(T_stack)
+            R_electrolyte = self.cell_electrolyte_resistance(
                 T_stack, I_stack
             )  # [Ohms]
-            R_electrolyte = R_ele_bf + R_ele_b
             R_membrane = self.cell_membrane_resistance(
                 T_stack
             )  # [Ohms] VERIFIED for Ohm*cm^2
             R_tot = R_electrode + R_electrolyte + R_membrane  # Ohm
-        else:
+        elif self.electrolyzer_type == "PEM":
             # updated for PEM
             R_electrode = self.cell_electrode_resistance()
             R_membrane = self.cell_membrane_resistance(
@@ -1086,7 +1135,7 @@ class ElectrolyzerCluster(object):
         theta, epsilon = self.cell_bubble_rate_coverage(T_stack, I_stack)
         R_ele_b = R_ele_bf * ((1 / ((1 - epsilon) ** (3 / 2))) - 1)
 
-        return R_ele_bf, R_ele_b  # Ohms
+        return R_ele_bf + R_ele_b  # Ohms
 
     def cell_membrane_resistance(self, T_stack):
         if self.electrolyzer_type == "ALK":
@@ -1126,8 +1175,31 @@ class ElectrolyzerCluster(object):
                 * (1 + (temp_coeff * (T_stack - tref)))
             )
 
-            return Ra, Rc
-        else:
+            return Ra + Rc
+
+        elif self.electrolyzer_type == "SOEC":
+            tref = 25
+            temp_coeff = 0.00586  # 1/degC
+            # resistivity of 100% dense electrode at tref
+            rho_nickle_0 = 6.4 * 10 ** (-6)  # [Ohm*cm]
+            # porosity of electrode
+            epsilon_Ni = 0.3
+            # Eqn 21 - effective resistance of electrode
+            rho_nickle_eff = rho_nickle_0 / ((1 - epsilon_Ni) ** 1.5)
+            Ra = (
+                rho_nickle_eff
+                * (self.e_e / self.cell_area)
+                * (1 + (temp_coeff * (T_stack - tref)))
+            )
+            Rc = (
+                rho_nickle_eff
+                * (self.e_e / self.cell_area)
+                * (1 + (temp_coeff * (T_stack - tref)))
+            )
+
+            return Ra + Rc
+        
+        elif self.electrolyzer_type == "PEM":
             # [ohms*cm^2] from Table 1 in  https://journals.utm.my/jurnalteknologi/article/view/5213/3557
             R_elec = 3.5 * (10 ** (-5))
             return R_elec
