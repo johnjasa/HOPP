@@ -852,7 +852,6 @@ class ElectrolyzerCluster(object):
             self.BOL_design_info.update({"Feedstock Usage: Liters H2O/kg-H2": 10})
 
     def cell_bubble_rate_coverage(self, T_stack, I_stack):
-        # JJ: eqs 14 and 15?
         T_k = convert_temperature([T_stack], "C", "K")[0]
         T_amb = convert_temperature([25], "C", "K")[0]
         J_lim = 30  # [A/cm^2] [Vogt,Balzer 2005]
@@ -921,6 +920,28 @@ class ElectrolyzerCluster(object):
         U_rev = Urev0 + ((self.R * T_K) / (2 * self.F)) * (np.log(b))
         return U_rev
 
+    def calc_temp_dependent_gibbs(self, T_K):
+        """
+        Calculate the Gibbs free energy based on the temperature.
+
+        Args:
+            T_stack (float): Temperature in Celsius.
+
+        Returns:
+            float: Gibbs free energy in J/mol.
+        """
+        if T_K <= 298:
+            gibbs_energy = 237.24e3
+        elif T_K <= 373:
+            gibbs_energy = 237.24e3 - ((237.24e3 - 225e3) / (373 - 298)) * (T_K - 298)
+        elif T_K <= 1300:
+            gibbs_energy = 225e3 - ((225e3 - 175e3) / (1300 - 373)) * (T_K - 373)
+        else:
+            gibbs_energy = 175e3
+        
+        return gibbs_energy
+
+
     def cell_reversible_overpotential(self, T_stack):
         if self.electrolyzer_type == "ALK":
             T_K = convert_temperature([T_stack], "C", "K")[0]
@@ -963,7 +984,7 @@ class ElectrolyzerCluster(object):
             U_rev = Urev0 + ((R * T_K) / (2 * self.F)) * np.log(
                 ((self.pressure_operating - Pv_KOH) ** 1.5) / alpha_h20
             )
-        else:
+        elif self.electrolyzer_type == "PEM":
             # updated for PEM
             # TODO: make pressure an attribute
 
@@ -987,14 +1008,41 @@ class ElectrolyzerCluster(object):
                 )
             )
 
+        elif self.electrolyzer_type == "SOEC":
+            T_K = convert_temperature([T_stack], "C", "K")[0]
+            Urev0 = self.cell_Urev0(T_K)
+            p_fuel_atm = self.fuel_pressure * (
+                atm / bar
+            )  # [atm] total pressure at the anode
+            p_sweep_atm = self.sweep_pressure * (
+                atm / bar
+            )  # [atm] total pressure at the cathode
+            # TODO: add in daltons law of partial pressures
+            patmo_atm = 1  # atmospheric pressure
+            # TODO: replace Antoine formula with Arden-Buck
+            p_H2O_sat_atm = self.antoine_formula(T_stack)
+
+            # fuel is cathode and sweep is anode
+            # JJ: unclear if this is enough or need to add more terms from Eqn 11
+            U_rev = Urev0 + ((self.R * T_K) / (2 * self.F)) * (
+                np.log(
+                    ((p_sweep_atm - p_H2O_sat_atm) / patmo_atm)
+                    * np.sqrt((p_fuel_atm - p_H2O_sat_atm) / patmo_atm)
+                )
+            )
+
         return U_rev
 
-    def cell_Urev0(self):
+    def cell_Urev0(self, T_K=None):
         # http://dx.doi.org/10.1016/j.ijhydene.2017.03.046
         # Urev0 = (self.gibbs / (2 * self.F)) - (0.9*1e-3)*(T_K-298)
         # JJ: eq 11
         # JJ: sign issue?
-        return self.gibbs / (2 * self.F)
+        if T_K is not None:
+            gibbs = self.calc_temp_dependent_gibbs(T_K)
+        else:
+            gibbs = self.gibbs
+        return gibbs / (2 * self.F)
 
     def cell_Utn(self):
         # change in enthalpy (H) over zF
@@ -1068,7 +1116,7 @@ class ElectrolyzerCluster(object):
                     V_act_c = bc * np.maximum(0, np.log(jc / j0c))
 
             return V_act_a + V_act_c
-        else:
+        elif self.electrolyzer_type == "PEM":
             # updated for PEM
             # validated against Figure 5 of Reference
             T_K = convert_temperature([T_stack], "C", "K")[0]
@@ -1085,6 +1133,33 @@ class ElectrolyzerCluster(object):
             V_act_a = ((self.R * T_K) / (a_a * self.F)) * np.arcsinh(i / (2 * i_o_a))
             V_act_c = ((self.R * T_K) / (a_c * self.F)) * np.arcsinh(i / (2 * i_o_c))
             return V_act_a + V_act_c
+        
+        elif self.electrolyzer_type == "SOEC":
+            T_K = convert_temperature([T_stack], "C", "K")[0]
+
+            j = self.calc_current_density(I_stack, T_stack)
+
+            # Constants from Table 1, Electro-kinetic parameters
+            gamma_fuel = 3.504e8
+            gamma_sweep = 1.698e8
+            E_act_fuel = 87.4e3
+            E_act_sweep = 88.75e3
+            beta_fuel = 0.5
+
+            # JJ: Eqns 20 and 21
+            j_star_h2 = gamma_fuel * np.exp(-E_act_fuel / (R * T_K))
+            j_star_o2 = gamma_sweep * np.exp(-E_act_sweep / (R * T_K))
+
+            # JJ: Eqns 18 and 19
+            p_star_h2 = 2.1362e5 * np.exp(-9.6e4 / (R * T_K))
+            p_star_o2 = 4.9e8 * np.exp(-200e3 / (R * T_K))
+
+            # JJ: Eqns 16 and 17
+            j_0_fuel = j_star_h2 * ((p_h2 / p_star_h2) ** (beta_fuel / 2.) * (p_h2o / p_0) ** (1 - beta_fuel / 2.)) / (1 + (p_h2 / p_star_h2) ** 0.5)
+            j_0_sweep = j_star_o2 * ((p_o2 / p_star_o2) ** (beta_fuel / 2.)) / (1 + (p_o2 / p_star_o2) ** 0.5)
+
+            V_act_fuel = b_fuel * np.maximum(0, np.log(j / j_0_fuel))
+            V_act_sweep = b_sweep * np.maximum(0, np.log(j / j_0_sweep))
 
     def cell_ohmic_overpotential(self, T_stack, I_stack):
         if self.electrolyzer_type == "ALK":
