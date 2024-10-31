@@ -144,8 +144,8 @@ class ElectrolyzerCluster(object):
         elif self.electrolyzer_type == "SOEC":
             # add SOEC here
             self.nominal_current_density = 1.0  # [A/cm^2]
-            self.fuel_pressure = 1.5  # [bar]
-            self.sweep_pressure = 1.5  # [bar]
+            self.fuel_pressure = 1.1  # [bar]
+            self.sweep_pressure = 1.1  # [bar]
             T_stack = 850.  # Celsius
             self.cell_area = 2000  # [cm^2] membrane and electrode area
             self.pressure_operating = 1.8  # bar
@@ -894,16 +894,12 @@ class ElectrolyzerCluster(object):
     def cell_design(self, T_stack, I_stack):
         # JJ: eqn 11
         V_rev = self.cell_reversible_overpotential(T_stack)
-        V_act = self.cell_activation_overpotential(T_stack, I_stack)
+        V_act_a, V_act_c = self.cell_activation_overpotential(T_stack, I_stack)
+        V_act = V_act_a + V_act_c
         V_ohm = self.cell_ohmic_overpotential(T_stack, I_stack)
-        V_conc = self.cell_concentration_overpotential(T_stack, I_stack)
+        V_conc_a, V_conc_c = self.cell_concentration_overpotential(T_stack, I_stack)
+        V_conc = V_conc_a + V_conc_c
         V_cell = V_rev + V_ohm + V_act + V_conc # Eqn 4
-        print("V_rev: ", V_rev)
-        print("V_act: ", V_act)
-        print("V_ohm: ", V_ohm)
-        print("V_conc: ", V_conc)
-        print("V_cell: ", V_cell)
-        print()
 
         V_cell = np.nan_to_num(V_cell)
         return V_cell
@@ -1016,7 +1012,7 @@ class ElectrolyzerCluster(object):
             )  # [atm] total pressure at the cathode
             # TODO: add in daltons law of partial pressures
             patmo_atm = 1  # atmospheric pressure
-            p_H2O_sat_atm = 0.5
+            p_H2O_sat_atm = 0.7
 
             # fuel is cathode and sweep is anode
             # JJ: unclear if this is enough or need to add more terms from Eqn 11
@@ -1110,7 +1106,7 @@ class ElectrolyzerCluster(object):
                     V_act_a = ba * np.maximum(0, np.log(ja / j0a))
                     V_act_c = bc * np.maximum(0, np.log(jc / j0c))
 
-            return V_act_a + V_act_c
+            return V_act_a, V_act_c
         elif self.electrolyzer_type == "PEM":
             # updated for PEM
             # validated against Figure 5 of Reference
@@ -1127,7 +1123,7 @@ class ElectrolyzerCluster(object):
             i_o_c = 2 * (10 ** (-3))
             V_act_a = ((self.R * T_K) / (a_a * self.F)) * np.arcsinh(i / (2 * i_o_a))
             V_act_c = ((self.R * T_K) / (a_c * self.F)) * np.arcsinh(i / (2 * i_o_c))
-            return V_act_a + V_act_c
+            return V_act_a, V_act_c
         
         elif self.electrolyzer_type == "SOEC":
             T_K = convert_temperature([T_stack], "C", "K")[0]
@@ -1145,7 +1141,7 @@ class ElectrolyzerCluster(object):
             j_0_c = kappa_c * np.exp(-E_c / (R * T_K))
             V_act_c = (self.R * T_K) / self.F * np.log(j / (2 * j_0_c) + np.sqrt((j / (2 * j_0_c)) ** 2 + 1))
 
-            return V_act_a + V_act_c
+            return V_act_a, V_act_c
 
     def cell_ohmic_overpotential(self, T_stack, I_stack):
         if self.electrolyzer_type == "ALK":
@@ -1159,7 +1155,6 @@ class ElectrolyzerCluster(object):
         elif self.electrolyzer_type == "SOEC":
             T_K = convert_temperature([T_stack], "C", "K")[0]
             i = self.calc_current_density(I_stack)
-            print(i)
             d_e = 12.5e-6  # m  # thickness of electrolyte
             V_ohm = 2.99e-5 * np.exp(10300. / T_K) * i * d_e
         return V_ohm
@@ -1285,7 +1280,7 @@ class ElectrolyzerCluster(object):
             epsilon_H2O = 809.1  # K
             epsilon_H2 = 59.7  # K
             k = 1.38064852e-23  # J/K
-            d_c = 12.5e-6  # [m] thickness of cathode
+            d_c = 22.5e-6  # [m] thickness of cathode
             d_a = 17.5e-6  # [m] thickness of anode
 
             epsilon_H2O_H2 = np.sqrt(epsilon_H2O * epsilon_H2)
@@ -1327,7 +1322,7 @@ class ElectrolyzerCluster(object):
                 np.sqrt(1 + (self.R * T_K * j * d_a) / (4 * self.F * D_O2 * P_O2))
             )
 
-            return V_conc_a + V_conc_c
+            return V_conc_a, V_conc_c
 
 
     # -------------------------------------- #

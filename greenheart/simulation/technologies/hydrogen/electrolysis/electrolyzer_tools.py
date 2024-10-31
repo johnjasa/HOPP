@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import pickle
 
 
 
@@ -80,4 +81,146 @@ def get_efficiency_curve(electrolyzer: ElectrolyzerCluster, file_desc = "test"):
     df = pd.DataFrame(dict(zip(keys,vals)))
     df.to_csv(filepath)
     print("Saved efficiency curve to: {}".format(filepath))
+    temp_data = {
+        "current_density": current_density,
+        "V_cell": V_cell
+    }
+    temp_filepath = os.path.join(os.path.dirname(__file__), "temp_data.pkl")
+    with open(temp_filepath, 'wb') as temp_file:
+        pickle.dump(temp_data, temp_file)
+    print("Saved temporary data to:", temp_filepath)
     return df
+
+def plot_IV_curve(electrolyzer: ElectrolyzerCluster, file_desc = "test"):
+    dA = 10
+    # current_range = np.arange(electrolyzer.min_current,electrolyzer.nominal_current+dA,dA) 
+    current_range = np.arange(dA,electrolyzer.nominal_current+dA,dA) 
+    current_density = np.zeros(len(current_range))
+    V_cell = np.zeros(len(current_range))
+
+    U_rev = np.zeros(len(current_range))
+    V_ohm = np.zeros(len(current_range))
+    
+    V_act_a = np.zeros(len(current_range))
+    V_act_c = np.zeros(len(current_range))
+
+    V_conc_a = np.zeros(len(current_range))
+    V_conc_c = np.zeros(len(current_range))
+
+    theta = np.zeros(len(current_range))
+    epsilon = np.zeros(len(current_range))
+
+    for ii,I_stack in enumerate(current_range):
+        theta[ii],epsilon[ii] = electrolyzer.cell_bubble_rate_coverage(electrolyzer.T_stack, I_stack)
+        current_density[ii] = electrolyzer.calc_current_density(I_stack)
+        V_cell[ii] = electrolyzer.cell_design(electrolyzer.T_stack,I_stack)
+
+        U_rev[ii] = electrolyzer.cell_reversible_overpotential(electrolyzer.T_stack)
+        V_ohm[ii] = electrolyzer.cell_ohmic_overpotential(electrolyzer.T_stack, I_stack)
+        V_act_a[ii], V_act_c[ii] = electrolyzer.cell_activation_overpotential(electrolyzer.T_stack, I_stack)
+        V_conc_a[ii], V_conc_c[ii] = electrolyzer.cell_concentration_overpotential(electrolyzer.T_stack, I_stack)
+
+    keys = ["I [A]","J [A/cm^2]","V_cell","U_rev","V_act,a","V_act,c","V_ohm","V_conc_a", "V_conc_c","Fractional Bubble Coverage","Bulk Bubbling Coeff"]
+    vals = [current_range,current_density,V_cell,U_rev,V_act_a,V_act_c,V_ohm,V_conc_a,V_conc_c,theta,epsilon]
+    df = pd.DataFrame(dict(zip(keys,vals)))
+    df.to_csv(os.path.join(os.path.dirname(__file__),f"{electrolyzer.electrolyzer_type}_IV-Curve_Data-{file_desc}.csv"))
+
+    fig, ax = plt.subplots(figsize=[8,8])
+    
+    horiz_al = "left"
+    vert_al = "center"
+    s_font = "large"#"small"
+    w_font = "semibold"
+    text_props = {"ha":horiz_al,"va":vert_al,"fontsize":s_font,"fontweight":w_font}
+    alpha_fill = 0.5
+    v_lw = 1.5
+    v_ls = "solid"
+    xtext = np.round(np.max(current_density),1)
+    #V_act os gold. V_ohm is green, U_rev is grey
+
+    v_color_line = "grey"
+    v_color_fill = "lightgrey"
+    y_lb = np.zeros(len(current_density))
+    y_ub = U_rev
+    y_mid = np.max(y_lb + (y_ub-y_lb)/2) + 0.5
+    # ax.plot(current_density,U_rev,color=v_color_line,lw=v_lw,ls=v_ls,label="$U_{rev}$")
+    # ax.fill_between(current_density,np.zeros(len(current_density)),U_rev,color=v_color_fill,alpha=alpha_fill)
+    ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$U_{rev}$")
+    ax.fill_between(current_density,y_lb,y_ub,color=v_color_fill,alpha=alpha_fill)
+    ax.text(x=xtext,y=y_mid,s="$U_{rev}$",color=v_color_line,**text_props)
+    
+    #V-act
+    y_lb+=U_rev
+    y_ub+=V_act_a
+    y_mid = np.max(y_lb + (y_ub-y_lb)/2)
+    v_lw = 0.75
+    v_color_line = "darkorange"
+    v_color_fill = "gold"
+    v_ls = "--"
+    # ax.plot(current_density,U_rev+V_act_a,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{act,a}$")
+    # ax.fill_between(current_density,U_rev,U_rev+V_act_a,color=v_color_fill,alpha=alpha_fill)
+    ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{act,a}$")
+    ax.fill_between(current_density,y_lb,y_ub,color=v_color_fill,alpha=alpha_fill)
+    ax.text(x=xtext,y=y_mid,s="$V_{act,a}$",color=v_color_line,**text_props)
+
+    y_lb+=V_act_a
+    y_ub+=V_act_c
+    y_mid = np.max(y_lb + (y_ub-y_lb)/2)
+    v_lw = 1.5
+    v_color_line = "orange"
+    v_color_fill = "goldenrod"
+    v_ls = "solid"
+    # ax.plot(current_density,U_rev+V_act_a+V_act_c,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{act,c}$")
+    # ax.fill_between(current_density,U_rev+V_act_a,U_rev+V_act_a+V_act_c,color=v_color_fill,alpha=alpha_fill)
+    ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{act,c}$")
+    ax.fill_between(current_density,y_lb,y_ub,color=v_color_fill,alpha=alpha_fill)
+    ax.text(x=xtext,y=y_mid,s="$V_{act,c}$",color=v_color_line,**text_props)
+
+    #V-Ohm
+    y_lb+=V_act_c
+    y_ub+=V_ohm
+    y_mid = np.max(y_lb + (y_ub-y_lb)/2)
+    v_lw = 0.75
+    v_color_line = "green"
+    v_color_fill = "palegreen"
+    v_ls = "--"
+    ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{\Omega}$")
+    ax.fill_between(current_density,y_lb,y_ub,color=v_color_fill,alpha=alpha_fill)
+    ax.text(x=xtext,y=y_mid,s="$V_{\Omega}$",color=v_color_line,**text_props)
+
+    y_lb+=V_ohm
+    y_ub+=V_conc_a
+    y_mid = np.max(y_lb + (y_ub-y_lb)/2)
+    v_lw = 1.5
+    v_ls = "solid"
+    v_color_line = "lime"
+    v_color_fill = "lawngreen"
+    ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{conc,a}$")
+    ax.fill_between(current_density,y_lb,y_ub,color=v_color_fill,alpha=alpha_fill)
+    ax.text(x=xtext,y=y_mid,s="$V_{conc,a}$",color=v_color_line,**text_props)
+
+    y_lb+=V_conc_a
+    y_ub+=V_conc_c
+    y_mid = np.max(y_lb + (y_ub-y_lb)/2)
+    v_lw = 1.5
+    v_ls = "solid"
+    v_color_line = "darkcyan"
+    v_color_fill = "aqua"
+    ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{conc,c}$")
+    ax.fill_between(current_density,y_lb,y_ub,color=v_color_fill,alpha=alpha_fill)
+    ax.text(x=xtext,y=y_mid,s="$V_{conc,c}$",color=v_color_line,**text_props)
+
+    v_lw = 0.5
+    ax.plot(current_density,V_cell,color="black",ls="--",label="V_{cell}")
+
+    ax.set_xlabel("Current Density [A/cm^2]", fontsize=16)
+    x0 = ax.get_xlim()[0]
+    x1 = ax.get_xlim()[1] + x0
+    ax.set_xlim([0,x1])
+    ax.set_ylim([0,ax.get_ylim()[1]])
+    # ax.set_xlim([np.min(current_density),np.max(current_density)])
+    # ax.set_ylim([0,np.max(V_cell)])
+    ax.set_ylabel("Cell Voltage [V/cell]", fontsize=16)
+    fig.tight_layout()
+    fig.savefig(os.path.join(os.path.dirname(__file__),f"{electrolyzer.electrolyzer_type}-Curve-{file_desc}.pdf"),bbox_inches = "tight")
+    plt.close()
