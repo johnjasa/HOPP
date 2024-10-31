@@ -135,7 +135,7 @@ def plot_IV_curve(electrolyzer: ElectrolyzerCluster, file_desc = "test"):
     alpha_fill = 0.5
     v_lw = 1.5
     v_ls = "solid"
-    xtext = np.round(np.max(current_density),1)
+    xtext = np.round(np.max(current_density),1)+.01
     #V_act os gold. V_ohm is green, U_rev is grey
 
     v_color_line = "grey"
@@ -145,9 +145,9 @@ def plot_IV_curve(electrolyzer: ElectrolyzerCluster, file_desc = "test"):
     y_mid = np.max(y_lb + (y_ub-y_lb)/2) + 0.5
     # ax.plot(current_density,U_rev,color=v_color_line,lw=v_lw,ls=v_ls,label="$U_{rev}$")
     # ax.fill_between(current_density,np.zeros(len(current_density)),U_rev,color=v_color_fill,alpha=alpha_fill)
-    ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$U_{rev}$")
+    ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$V_{rev}$")
     ax.fill_between(current_density,y_lb,y_ub,color=v_color_fill,alpha=alpha_fill)
-    ax.text(x=xtext,y=y_mid,s="$U_{rev}$",color=v_color_line,**text_props)
+    ax.text(x=xtext,y=y_mid-.1,s="$V_{rev}$",color=v_color_line,**text_props)
     
     #V-act
     y_lb+=U_rev
@@ -217,7 +217,7 @@ def plot_IV_curve(electrolyzer: ElectrolyzerCluster, file_desc = "test"):
     x0 = ax.get_xlim()[0]
     x1 = ax.get_xlim()[1] + x0
     ax.set_xlim([0,x1])
-    ax.set_ylim([0,ax.get_ylim()[1]])
+    ax.set_ylim([0.8,ax.get_ylim()[1]])
     # ax.set_xlim([np.min(current_density),np.max(current_density)])
     # ax.set_ylim([0,np.max(V_cell)])
     ax.set_ylabel("Cell Voltage [V/cell]", fontsize=16)

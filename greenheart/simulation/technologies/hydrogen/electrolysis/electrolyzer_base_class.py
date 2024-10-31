@@ -1131,12 +1131,12 @@ class ElectrolyzerCluster(object):
             j = self.calc_current_density(I_stack, T_stack)
 
             # Table 1 from Wang et al 2021
-            kappa_a = 2.051e9  # A / m**2
+            kappa_a = 2.051e8  # A / m**2
             E_a = 1.2e5  # J / mol
             j_0_a = kappa_a * np.exp(-E_a / (R * T_K))
             V_act_a = (self.R * T_K) / self.F * np.log(j / (2 * j_0_a) + np.sqrt((j / (2 * j_0_a)) ** 2 + 1))
 
-            kappa_c = 1.344e10  # A / m**2
+            kappa_c = 1.344e6  # A / m**2
             E_c = 1.e5  # J / mol
             j_0_c = kappa_c * np.exp(-E_c / (R * T_K))
             V_act_c = (self.R * T_K) / self.F * np.log(j / (2 * j_0_c) + np.sqrt((j / (2 * j_0_c)) ** 2 + 1))
@@ -1156,7 +1156,7 @@ class ElectrolyzerCluster(object):
             T_K = convert_temperature([T_stack], "C", "K")[0]
             i = self.calc_current_density(I_stack)
             d_e = 12.5e-6  # m  # thickness of electrolyte
-            V_ohm = 2.99e-5 * np.exp(10300. / T_K) * i * d_e
+            V_ohm = 2.99e-1 * np.exp(10300. / T_K) * i * d_e
         return V_ohm
 
     def cell_total_resistance(self, T_stack, I_stack=None):
@@ -1280,7 +1280,7 @@ class ElectrolyzerCluster(object):
             epsilon_H2O = 809.1  # K
             epsilon_H2 = 59.7  # K
             k = 1.38064852e-23  # J/K
-            d_c = 22.5e-6  # [m] thickness of cathode
+            d_c = 17.5e-6  # [m] thickness of cathode
             d_a = 17.5e-6  # [m] thickness of anode
 
             epsilon_H2O_H2 = np.sqrt(epsilon_H2O * epsilon_H2)
