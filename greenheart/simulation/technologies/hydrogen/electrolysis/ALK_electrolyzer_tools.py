@@ -116,7 +116,7 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     
     horiz_al = "left"
     vert_al = "center"
-    s_font = "medium"#"small"
+    s_font = "large"#"small"
     w_font = "semibold"
     text_props = {"ha":horiz_al,"va":vert_al,"fontsize":s_font,"fontweight":w_font}
     alpha_fill = 0.5
@@ -129,7 +129,7 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     v_color_fill = "lightgrey"
     y_lb = np.zeros(len(current_density))
     y_ub = U_rev
-    y_mid = np.max(y_lb + (y_ub-y_lb)/2)
+    y_mid = np.max(y_lb + (y_ub-y_lb)/2) + 0.5
     # ax.plot(current_density,U_rev,color=v_color_line,lw=v_lw,ls=v_ls,label="$U_{rev}$")
     # ax.fill_between(current_density,np.zeros(len(current_density)),U_rev,color=v_color_fill,alpha=alpha_fill)
     ax.plot(current_density,y_ub,color=v_color_line,lw=v_lw,ls=v_ls,label="$U_{rev}$")
@@ -204,14 +204,14 @@ def plot_IV_curve(alk:ALK_Clusters,file_desc = "test"):
     v_lw = 0.5
     ax.plot(current_density,V_cell,color="black",ls="--",label="V_{cell}")
 
-    ax.set_xlabel("Current Density [A/cm^2]")
+    ax.set_xlabel("Current Density [A/cm^2]", fontsize=16)
     x0 = ax.get_xlim()[0]
     x1 = ax.get_xlim()[1] + x0
     ax.set_xlim([0,x1])
     ax.set_ylim([0,ax.get_ylim()[1]])
     # ax.set_xlim([np.min(current_density),np.max(current_density)])
     # ax.set_ylim([0,np.max(V_cell)])
-    ax.set_ylabel("Cell Voltage [V/cell]")
+    ax.set_ylabel("Cell Voltage [V/cell]", fontsize=16)
     fig.tight_layout()
     fig.savefig(os.path.join(os.path.dirname(__file__),"Alkaline_IV-Curve-{}.pdf".format(file_desc)),bbox_inches = "tight")
     plt.close()

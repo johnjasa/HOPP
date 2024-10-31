@@ -4,6 +4,7 @@ import scipy
 import rainflow
 from scipy.constants import atm, mmHg, bar
 from scipy.constants import R, convert_temperature
+from scipy.optimize import broyden1
 
 
 def stack_power_to_current(
@@ -144,6 +145,11 @@ class ElectrolyzerCluster(object):
             self.nominal_current_density = 0.5  # [A/cm^2]
             self.fuel_pressure = 1.01325  # [bar]
             self.sweep_pressure = 1.01325  # [bar]
+            T_stack = 800.  # Celsius
+            self.cell_area = 400  # [cm^2] membrane and electrode area
+            self.pressure_operating = 1.8  # bar
+            self.n_cells = 1500
+
         elif self.electrolyzer_type == "ALK":
             self.nominal_current_density = 0.4  # [A/cm^2]
             self.pressure_operating = 1  # bar
@@ -179,7 +185,7 @@ class ElectrolyzerCluster(object):
         # INITIALIZATION
         self.initalize_outputs(plant_life, run_LTA, debug_mode)
 
-        if self.electrolyzer_type == "PEM":
+        if self.electrolyzer_type == "PEM" or self.electrolyzer_type == "SOEC":
             self.feedstock_usage()
         else:
             self.m, self.M = self.create_electrolyte()
@@ -1019,8 +1025,7 @@ class ElectrolyzerCluster(object):
             )  # [atm] total pressure at the cathode
             # TODO: add in daltons law of partial pressures
             patmo_atm = 1  # atmospheric pressure
-            # TODO: replace Antoine formula with Arden-Buck
-            p_H2O_sat_atm = self.antoine_formula(T_stack)
+            p_H2O_sat_atm = 1.01
 
             # fuel is cathode and sweep is anode
             # JJ: unclear if this is enough or need to add more terms from Eqn 11
@@ -1031,18 +1036,27 @@ class ElectrolyzerCluster(object):
                 )
             )
 
+            print('p_sweep_atm', p_sweep_atm)
+            print('p_fuel_atm', p_fuel_atm)
+            print('p_H2O_sat_atm', p_H2O_sat_atm)
+            print('patmo_atm', patmo_atm)
+            print('Urev0', Urev0)
+            print('R', self.R)
+            print('T_K', T_K)
+            print('F', self.F)
+            print('U_rev', U_rev)
+
         return U_rev
 
     def cell_Urev0(self, T_K=None):
         # http://dx.doi.org/10.1016/j.ijhydene.2017.03.046
         # Urev0 = (self.gibbs / (2 * self.F)) - (0.9*1e-3)*(T_K-298)
-        # JJ: eq 11
-        # JJ: sign issue?
         if T_K is not None:
-            gibbs = self.calc_temp_dependent_gibbs(T_K)
+            # eq. 3 from Wang et al 2021
+            Urev0 = 1.253 - 2.4516e-4 * T_K
         else:
-            gibbs = self.gibbs
-        return gibbs / (2 * self.F)
+            Urev0 = self.gibbs / (2 * self.F)
+        return Urev0
 
     def cell_Utn(self):
         # change in enthalpy (H) over zF
@@ -1154,12 +1168,50 @@ class ElectrolyzerCluster(object):
             p_star_h2 = 2.1362e5 * np.exp(-9.6e4 / (R * T_K))
             p_star_o2 = 4.9e8 * np.exp(-200e3 / (R * T_K))
 
+            # JJ: unclear if correct
+            p_o2 = self.sweep_pressure
+            p_h2 = self.fuel_pressure
+            p_h2o = self.pressure_operating
+            p_0 = 1.01325
+
             # JJ: Eqns 16 and 17
             j_0_fuel = j_star_h2 * ((p_h2 / p_star_h2) ** (beta_fuel / 2.) * (p_h2o / p_0) ** (1 - beta_fuel / 2.)) / (1 + (p_h2 / p_star_h2) ** 0.5)
             j_0_sweep = j_star_o2 * ((p_o2 / p_star_o2) ** (beta_fuel / 2.)) / (1 + (p_o2 / p_star_o2) ** 0.5)
 
-            V_act_fuel = b_fuel * np.maximum(0, np.log(j / j_0_fuel))
-            V_act_sweep = b_sweep * np.maximum(0, np.log(j / j_0_sweep))
+            print("j_star_h2", j_star_h2)
+            print("j_star_o2", j_star_o2)
+            print("p_star_h2", p_star_h2)
+            print("p_star_o2", p_star_o2)
+            print("p_o2", p_o2)
+            print("p_h2", p_h2)
+            print("p_h2o", p_h2o)
+            print("p_0", p_0)
+            print("j_0_fuel", j_0_fuel)
+            print("j_0_sweep", j_0_sweep)
+            print()
+
+            def calc_eta_fuel(x):
+                j / j_0_fuel - np.exp((beta_fuel + 1) * self.F * x / (R * T_K)) + np.exp(-beta_fuel * self.F * x / (R * T_K))
+                print(f"j: {j}")
+                print(f"j_0_fuel: {j_0_fuel}")
+                print(f"j_0_sweep: {j_0_sweep}")
+                print(f"gamma_fuel: {gamma_fuel}")
+                print(f"gamma_sweep: {gamma_sweep}")
+                print(f"E_act_fuel: {E_act_fuel}")
+                print(f"E_act_sweep: {E_act_sweep}")
+                print(f"beta_fuel: {beta_fuel}")
+                print(f"p_star_h2: {p_star_h2}")
+                print(f"p_star_o2: {p_star_o2}")
+                print(f"p_o2: {p_o2}")
+                print(f"p_h2: {p_h2}")
+                print(f"p_h2o: {p_h2o}")
+                print(f"p_0: {p_0}")
+                print(f"T_K: {T_K}")
+
+            V_act_fuel = broyden1(calc_eta_fuel, 0.5)
+            print(V_act_fuel)
+            exit()
+
 
     def cell_ohmic_overpotential(self, T_stack, I_stack):
         if self.electrolyzer_type == "ALK":
