@@ -26,6 +26,7 @@ class ElectrolyzerCluster(object):
     M_H2: float = 2.016  # [g/mol]
     M_O: float = 15.999  # molecular weight of Oxygen [g/mol]
     M_O2: float = 31.999  # [g/mol]
+    M_H2O: float = 18.01528  # molecular weight of Water [g/mol]
     M_K: float = 39.0983  # molecular weight of Potassium [g/mol]
 
     lhv: float = 33.33  # lower heating value of H2 [kWh/kg]
@@ -98,11 +99,11 @@ class ElectrolyzerCluster(object):
                 cold_start_delay = 600
 
         if anode_pressure_bar is None:
-            if self.electrolyzer_type == "PEM":
+            if self.electrolyzer_type == "PEM" or self.electrolyzer_type == "SOEC":
                 anode_pressure_bar = 1.01325
 
         if cathode_pressure_bar is None:
-            if self.electrolyzer_type == "PEM":
+            if self.electrolyzer_type == "PEM" or self.electrolyzer_type == "SOEC":
                 cathode_pressure_bar = 1.01325
 
         self.include_degradation_penalty = include_degradation_penalty
@@ -142,13 +143,19 @@ class ElectrolyzerCluster(object):
             self.rate_fatigue = 3.33330244e-07  # multiply by rf_track
         elif self.electrolyzer_type == "SOEC":
             # add SOEC here
-            self.nominal_current_density = 0.5  # [A/cm^2]
-            self.fuel_pressure = 1.01325  # [bar]
-            self.sweep_pressure = 1.01325  # [bar]
-            T_stack = 800.  # Celsius
-            self.cell_area = 400  # [cm^2] membrane and electrode area
+            self.nominal_current_density = 1.0  # [A/cm^2]
+            self.fuel_pressure = 1.5  # [bar]
+            self.sweep_pressure = 1.5  # [bar]
+            T_stack = 850.  # Celsius
+            self.cell_area = 2000  # [cm^2] membrane and electrode area
             self.pressure_operating = 1.8  # bar
             self.n_cells = 1500
+            self.anode_pressure = (
+                anode_pressure_bar  # [bar] operating pressure at anode
+            )
+            self.cathode_pressure = (
+                cathode_pressure_bar  # [bar] operating pressure at cathode
+            )
 
         elif self.electrolyzer_type == "ALK":
             self.nominal_current_density = 0.4  # [A/cm^2]
@@ -179,7 +186,7 @@ class ElectrolyzerCluster(object):
         self.stack_rating_kW = 1000  # 1 MW - this is reset in system_design
 
         # CELL DEGRADATION RATES
-        if self.electrolyzer_type == "PEM":
+        if self.electrolyzer_type == "PEM" or self.electrolyzer_type == "SOEC":
             self.onoff_deg_rate = 1.47821515e-04  # [V/off-cycle]
 
         # INITIALIZATION
@@ -799,7 +806,6 @@ class ElectrolyzerCluster(object):
         grams_of_solute = solution_weight_g * (electrolyte_concentration_percent)
         moles_of_solute = grams_of_solute / self.M_KOH  # [mols of solute / solution]
         # solvent is water
-        self.M_H2O = 2 * self.M_H + self.M_O  # [g/mol]
         grams_of_solvent = solution_weight_g * (1 - electrolyte_concentration_percent)
         kg_of_solvent = (1 / 1000) * grams_of_solvent
 
@@ -890,7 +896,14 @@ class ElectrolyzerCluster(object):
         V_rev = self.cell_reversible_overpotential(T_stack)
         V_act = self.cell_activation_overpotential(T_stack, I_stack)
         V_ohm = self.cell_ohmic_overpotential(T_stack, I_stack)
-        V_cell = V_rev + V_ohm + V_act  # Eqn 4
+        V_conc = self.cell_concentration_overpotential(T_stack, I_stack)
+        V_cell = V_rev + V_ohm + V_act + V_conc # Eqn 4
+        print("V_rev: ", V_rev)
+        print("V_act: ", V_act)
+        print("V_ohm: ", V_ohm)
+        print("V_conc: ", V_conc)
+        print("V_cell: ", V_cell)
+        print()
 
         V_cell = np.nan_to_num(V_cell)
         return V_cell
@@ -925,28 +938,6 @@ class ElectrolyzerCluster(object):
         b = (p_H2 * np.sqrt(p_O2)) / p_H2O_sat_bar  # maybe should be in Pa?
         U_rev = Urev0 + ((self.R * T_K) / (2 * self.F)) * (np.log(b))
         return U_rev
-
-    def calc_temp_dependent_gibbs(self, T_K):
-        """
-        Calculate the Gibbs free energy based on the temperature.
-
-        Args:
-            T_stack (float): Temperature in Celsius.
-
-        Returns:
-            float: Gibbs free energy in J/mol.
-        """
-        if T_K <= 298:
-            gibbs_energy = 237.24e3
-        elif T_K <= 373:
-            gibbs_energy = 237.24e3 - ((237.24e3 - 225e3) / (373 - 298)) * (T_K - 298)
-        elif T_K <= 1300:
-            gibbs_energy = 225e3 - ((225e3 - 175e3) / (1300 - 373)) * (T_K - 373)
-        else:
-            gibbs_energy = 175e3
-        
-        return gibbs_energy
-
 
     def cell_reversible_overpotential(self, T_stack):
         if self.electrolyzer_type == "ALK":
@@ -1025,7 +1016,7 @@ class ElectrolyzerCluster(object):
             )  # [atm] total pressure at the cathode
             # TODO: add in daltons law of partial pressures
             patmo_atm = 1  # atmospheric pressure
-            p_H2O_sat_atm = 1.01
+            p_H2O_sat_atm = 0.5
 
             # fuel is cathode and sweep is anode
             # JJ: unclear if this is enough or need to add more terms from Eqn 11
@@ -1035,16 +1026,6 @@ class ElectrolyzerCluster(object):
                     * np.sqrt((p_fuel_atm - p_H2O_sat_atm) / patmo_atm)
                 )
             )
-
-            print('p_sweep_atm', p_sweep_atm)
-            print('p_fuel_atm', p_fuel_atm)
-            print('p_H2O_sat_atm', p_H2O_sat_atm)
-            print('patmo_atm', patmo_atm)
-            print('Urev0', Urev0)
-            print('R', self.R)
-            print('T_K', T_K)
-            print('F', self.F)
-            print('U_rev', U_rev)
 
         return U_rev
 
@@ -1153,81 +1134,39 @@ class ElectrolyzerCluster(object):
 
             j = self.calc_current_density(I_stack, T_stack)
 
-            # Constants from Table 1, Electro-kinetic parameters
-            gamma_fuel = 3.504e8
-            gamma_sweep = 1.698e8
-            E_act_fuel = 87.4e3
-            E_act_sweep = 88.75e3
-            beta_fuel = 0.5
+            # Table 1 from Wang et al 2021
+            kappa_a = 2.051e9  # A / m**2
+            E_a = 1.2e5  # J / mol
+            j_0_a = kappa_a * np.exp(-E_a / (R * T_K))
+            V_act_a = (self.R * T_K) / self.F * np.log(j / (2 * j_0_a) + np.sqrt((j / (2 * j_0_a)) ** 2 + 1))
 
-            # JJ: Eqns 20 and 21
-            j_star_h2 = gamma_fuel * np.exp(-E_act_fuel / (R * T_K))
-            j_star_o2 = gamma_sweep * np.exp(-E_act_sweep / (R * T_K))
+            kappa_c = 1.344e10  # A / m**2
+            E_c = 1.e5  # J / mol
+            j_0_c = kappa_c * np.exp(-E_c / (R * T_K))
+            V_act_c = (self.R * T_K) / self.F * np.log(j / (2 * j_0_c) + np.sqrt((j / (2 * j_0_c)) ** 2 + 1))
 
-            # JJ: Eqns 18 and 19
-            p_star_h2 = 2.1362e5 * np.exp(-9.6e4 / (R * T_K))
-            p_star_o2 = 4.9e8 * np.exp(-200e3 / (R * T_K))
-
-            # JJ: unclear if correct
-            p_o2 = self.sweep_pressure
-            p_h2 = self.fuel_pressure
-            p_h2o = self.pressure_operating
-            p_0 = 1.01325
-
-            # JJ: Eqns 16 and 17
-            j_0_fuel = j_star_h2 * ((p_h2 / p_star_h2) ** (beta_fuel / 2.) * (p_h2o / p_0) ** (1 - beta_fuel / 2.)) / (1 + (p_h2 / p_star_h2) ** 0.5)
-            j_0_sweep = j_star_o2 * ((p_o2 / p_star_o2) ** (beta_fuel / 2.)) / (1 + (p_o2 / p_star_o2) ** 0.5)
-
-            print("j_star_h2", j_star_h2)
-            print("j_star_o2", j_star_o2)
-            print("p_star_h2", p_star_h2)
-            print("p_star_o2", p_star_o2)
-            print("p_o2", p_o2)
-            print("p_h2", p_h2)
-            print("p_h2o", p_h2o)
-            print("p_0", p_0)
-            print("j_0_fuel", j_0_fuel)
-            print("j_0_sweep", j_0_sweep)
-            print()
-
-            def calc_eta_fuel(x):
-                j / j_0_fuel - np.exp((beta_fuel + 1) * self.F * x / (R * T_K)) + np.exp(-beta_fuel * self.F * x / (R * T_K))
-                print(f"j: {j}")
-                print(f"j_0_fuel: {j_0_fuel}")
-                print(f"j_0_sweep: {j_0_sweep}")
-                print(f"gamma_fuel: {gamma_fuel}")
-                print(f"gamma_sweep: {gamma_sweep}")
-                print(f"E_act_fuel: {E_act_fuel}")
-                print(f"E_act_sweep: {E_act_sweep}")
-                print(f"beta_fuel: {beta_fuel}")
-                print(f"p_star_h2: {p_star_h2}")
-                print(f"p_star_o2: {p_star_o2}")
-                print(f"p_o2: {p_o2}")
-                print(f"p_h2: {p_h2}")
-                print(f"p_h2o: {p_h2o}")
-                print(f"p_0: {p_0}")
-                print(f"T_K: {T_K}")
-
-            V_act_fuel = broyden1(calc_eta_fuel, 0.5)
-            print(V_act_fuel)
-            exit()
-
+            return V_act_a + V_act_c
 
     def cell_ohmic_overpotential(self, T_stack, I_stack):
         if self.electrolyzer_type == "ALK":
             R_tot = self.cell_total_resistance(T_stack, I_stack)  # Ohms
             V_ohm = I_stack * R_tot  # [V/cell]
-            return V_ohm
-        elif self.electrolyzer_type == "PEM" or self.electrolyzer_type == "SOEC":
+        elif self.electrolyzer_type == "PEM":
             # updated for PEM
             R_tot = self.cell_total_resistance(T_stack)  # Ohms
             i = self.calc_current_density(I_stack)
             V_ohm = i * R_tot  # [V/cell]
-            return V_ohm
+        elif self.electrolyzer_type == "SOEC":
+            T_K = convert_temperature([T_stack], "C", "K")[0]
+            i = self.calc_current_density(I_stack)
+            print(i)
+            d_e = 12.5e-6  # m  # thickness of electrolyte
+            V_ohm = 2.99e-5 * np.exp(10300. / T_K) * i * d_e
+        return V_ohm
 
     def cell_total_resistance(self, T_stack, I_stack=None):
         # JJ: eq 13
-        if self.electrolyzer_type == "ALK" or self.electrolyzer_type == "SOEC":
+        if self.electrolyzer_type == "ALK":
             R_electrode = self.cell_electrode_resistance(T_stack)
             R_electrolyte = self.cell_electrolyte_resistance(
                 T_stack, I_stack
@@ -1330,6 +1269,66 @@ class ElectrolyzerCluster(object):
             # [ohms*cm^2] from Table 1 in  https://journals.utm.my/jurnalteknologi/article/view/5213/3557
             R_elec = 3.5 * (10 ** (-5))
             return R_elec
+
+    def cell_concentration_overpotential(self, T_stack, I_stack):
+        if self.electrolyzer_type == "ALK" or self.electrolyzer_type == "PEM":
+            return 0.
+        elif self.electrolyzer_type == "SOEC":
+            j = self.calc_current_density(I_stack, T_stack)
+            T_K = convert_temperature([T_stack], "C", "K")[0]
+
+            mean_pore_radius = 2.77e-6 / 2.  # [m]
+            D_H2Ok = 4. / 3. * mean_pore_radius * np.sqrt(8 * self.R * T_K / (np.pi * self.M_H2O))
+
+            sigma_H2O = 2.641  # Angstroms
+            sigma_H2 = 2.827  # Angstroms
+            epsilon_H2O = 809.1  # K
+            epsilon_H2 = 59.7  # K
+            k = 1.38064852e-23  # J/K
+            d_c = 12.5e-6  # [m] thickness of cathode
+            d_a = 17.5e-6  # [m] thickness of anode
+
+            epsilon_H2O_H2 = np.sqrt(epsilon_H2O * epsilon_H2)
+            tau = k * T_K / (epsilon_H2O_H2)
+            sigma_H2O_H2 = (sigma_H2O + sigma_H2) / 2
+            omega_d = 1.06 / (tau ** 0.156) + 0.193 / np.exp(0.476 * tau) + 1.036 / np.exp(1.53 * tau) + 1.765 / (3.894 * tau)
+
+            D_H2_H2O = 0.00133 * (1/self.M_H2 + 1 / self.M_H2O)**0.5 * T_K ** 1.5 / (self.pressure_operating * sigma_H2O_H2**2 * omega_d)
+
+            # doi:10.1016/j.jpowsour.2004.06.051
+            a_0 = -.152275
+            a_1 = 0.001572
+            a_2 = 7.031465e-6
+            b_1 = 0.000109
+            D_H2_H2O = (a_0 + a_1 * T_K + a_2 * T_K**2) / (1 + b_1 * T_K)
+
+            tortuosity = 5.0
+            porosity = 0.3
+            one_over_D_H2O = tortuosity / porosity * (1 / D_H2_H2O + 1 / D_H2Ok)
+            D_H2O = 1 / one_over_D_H2O
+
+            P_H2O_sat_atm = 1.01
+            P_H2O_sat_bar = P_H2O_sat_atm * (bar / atm)
+            P_H2 = self.cathode_pressure - P_H2O_sat_bar
+
+            V_conc_c = self.R * T_K / (2 * self.F) * np.log(
+                (1 + (j * self.R * T_K * d_c / (2 * self.F * D_H2O * P_H2))) / 
+                (1 - (j * self.R * T_K * d_c / (2 * self.F * D_H2O * P_H2O_sat_bar)))
+            )
+
+            D_O2 = D_H2O  # JJ: placeholder
+            P_O2 = self.anode_pressure - P_H2O_sat_bar
+
+            P_H2O_sat_atm = 1.01
+            P_H2O_sat_bar = P_H2O_sat_atm * (bar / atm)
+            P_H2 = self.cathode_pressure - P_H2O_sat_bar
+
+            V_conc_a = self.R * T_K / (2 * self.F) * np.log(
+                np.sqrt(1 + (self.R * T_K * j * d_a) / (4 * self.F * D_O2 * P_O2))
+            )
+
+            return V_conc_a + V_conc_c
+
 
     # -------------------------------------- #
     # ----- CELL DEGRADATION EQUATIONS ----- #
