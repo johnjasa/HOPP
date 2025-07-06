@@ -23,6 +23,7 @@ from hopp.simulation.technologies.resource import (
     HPCSolarData,
     AlaskaWindData,
     BCHRRRWindData,
+    MeteoWindData,
 )
 from hopp.tools.layout.plot_tools import plot_shape
 from hopp.utilities.log import hybrid_logger as logger
@@ -75,7 +76,7 @@ class SiteInfo(BaseClass):
         renewable_resource_origin (str): whether to download resource data from API or load directly from datasets files.
             Options are "API" or "HPC". Defaults to "API".
         wind_resource_origin: Which wind resource API to use, defaults to "WTK" for WIND Toolkit.
-            Options are "WTK", "TAP" or "BC-HRRR".
+            Options are "WTK", "TAP", "BC-HRRR", or "METEO".
         site_buffer (Optional): value to buffer site polygon. Defaults to 1e-8.
         solar_resource (Optional): dictionary or object containing solar resource data.
         wind_resource (Optional): dictionary or object containing wind resource data.
@@ -136,7 +137,7 @@ class SiteInfo(BaseClass):
     wave: bool = field(default=False)
     tidal: bool = field(default=False)
     renewable_resource_origin: str = field(default="API", validator=contains(["API", "HPC"]))
-    wind_resource_origin: str = field(default="WTK", validator=contains(["WTK", "TAP", "BC-HRRR"]))
+    wind_resource_origin: str = field(default="WTK", validator=contains(["WTK", "TAP", "BC-HRRR", "METEO"]))
     wind_resource_region: str = field(default="conus", validator=contains(["conus", "ak"]), converter=(str.strip, str.lower))
 
     site_buffer: Optional[float] = field(default = 1e-8)
@@ -418,8 +419,13 @@ class SiteInfo(BaseClass):
                                      hub_height_meters=self.hub_height,
                                      path_resource=self.path_resource, 
                                      filename=self.wind_resource_file)
+            elif self.wind_resource_origin == "METEO":
+                return MeteoWindData(wind_lat, wind_lon, wind_year, 
+                                     hub_height_meters=self.hub_height,
+                                     path_resource=self.path_resource, 
+                                     filename=self.wind_resource_file)
             else:
-                raise ValueError("Invalid entry for `wind_resource_origin`, must be either 'WTK', 'TAP' or 'BC-HRRR'")
+                raise ValueError("Invalid entry for `wind_resource_origin`, must be either 'WTK', 'TAP', 'BC-HRRR', or 'METEO'")
         elif self.renewable_resource_origin == "HPC":
             return HPCWindData(wind_lat, wind_lon, wind_year, 
                               wind_turbine_hub_ht=self.hub_height,

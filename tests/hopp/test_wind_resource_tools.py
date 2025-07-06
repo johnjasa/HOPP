@@ -137,7 +137,7 @@ def test_weighted_vs_average_parsing_90m(wind_resource_data_90m):
 def test_pysam_combine_wind_files_csv():
     alaska_wind_resource_file = os.path.join(
     ROOT_DIR, "simulation", "resource_files", "wind", 
-    "66.68_-162.5_WTK_Alaksa_2019_60min_80m_100m.csv"
+    "66.68_-162.5_WTK_Alaska_2019_60min_80m_100m.csv"
     )
     resource_heights = [80.0,100.0]
     wind_data = combine_wind_files(alaska_wind_resource_file,resource_heights)

@@ -263,7 +263,7 @@ def test_alaska_wind_pysam():
     }
     alaska_wind_resource_file = os.path.join(
     ROOT_DIR, "simulation", "resource_files", "wind", 
-    "66.68_-162.5_WTK_Alaksa_2019_60min_80m_100m.csv"
+    "66.68_-162.5_WTK_Alaska_2019_60min_80m_100m.csv"
     )
     site_info = {
         "data": site_data,
@@ -293,7 +293,7 @@ def test_alaska_wind_floris():
     }
     alaska_wind_resource_file = os.path.join(
     ROOT_DIR, "simulation", "resource_files", "wind", 
-    "66.68_-162.5_WTK_Alaksa_2019_60min_80m_100m.csv"
+    "66.68_-162.5_WTK_Alaska_2019_60min_80m_100m.csv"
     )
     site_info = {
         "data": site_data,

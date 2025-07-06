@@ -87,7 +87,7 @@ class AlaskaWindData(Resource):
             heights[0] = height_low
             heights.append(height_high)
 
-        filename_base = f"{self.latitude}_{self.longitude}_WTK_Alaksa_{self.year}_{self.interval}min"
+        filename_base = f"{self.latitude}_{self.longitude}_WTK_Alaska_{self.year}_{self.interval}min"
         file_resource_full = filename_base
         file_resource_heights = dict()
 
