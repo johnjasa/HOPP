@@ -101,6 +101,7 @@ class BatteryConfig(BaseClass):
     minimum_SOC: float = field(default=10, validator=range_val(0, 100))
     maximum_SOC: float = field(default=90, validator=range_val(0, 100))
     initial_SOC: float = field(default=10, validator=range_val(0, 100))
+    availability_loss: float = field(default=0.0, validator=range_val(0, 100))
     fin_model: Optional[Union[str, dict, FinancialModelType]] = field(default=None)
     name: str = field(default="Battery")
 
@@ -174,6 +175,7 @@ class Battery(PowerSource):
         self._system_model.value("minimum_SOC", self.config.minimum_SOC)
         self._system_model.value("maximum_SOC", self.config.maximum_SOC)
         self._system_model.value("initial_SOC", self.config.initial_SOC)
+        self._system_model.ParamsPack.availabilty_loss = np.ones((self.site.n_timesteps)) * self.config.availability_loss
 
         self._dispatch = None
 

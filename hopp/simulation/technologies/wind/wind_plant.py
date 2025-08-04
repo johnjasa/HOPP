@@ -21,7 +21,6 @@ from hopp.simulation.technologies.power_source import PowerSource
 from hopp.simulation.technologies.sites import SiteInfo
 from hopp.simulation.technologies.wind.floris import Floris
 from hopp.tools.resource.wind_tools import calculate_air_density_losses
-from hopp.type_dec import resource_file_converter
 from hopp.utilities import load_yaml
 from hopp.utilities.log import hybrid_logger as logger
 from hopp.utilities.validators import gt_zero, contains, range_val
@@ -115,6 +114,7 @@ class WindConfig(BaseClass):
         converter=(str.strip, str.lower)
     )
     operational_losses: float = field(default=12.83, validator=range_val(0, 100))
+    elec_eff_loss: float = field(default=0.0, validator=range_val(0, 100))
     timestep: Optional[Tuple[int, int]] = field(default=(0,8760))
     fin_model: Optional[Union[dict, FinancialModelType]] = field(default=None)
     name: str = field(default="WindPlant")
@@ -127,6 +127,11 @@ class WindConfig(BaseClass):
     def __attrs_post_init__(self):
         if self.model_name == 'floris' and self.timestep is None:
             raise ValueError("Timestep (Tuple[int, int]) required for floris")
+
+        if self.elec_eff_loss > 0 and self.model_name == "floris":
+            raise ValueError(
+                "elec_eff_loss is not supported for floris model, only for pysam."
+            )
 
         if self.turbine_rating_kw is None and self.turbine_name is None:
             if self.model_name == "pysam" and self.model_input_file is None:
@@ -230,6 +235,7 @@ class WindPlant(PowerSource):
 
         super().__init__("WindPlant", self.site, system_model, financial_model)
         self._system_model.value("wind_resource_data", self.site.wind_resource.data)
+        self._system_model.Losses.assign({"elec_eff_loss": self.config.elec_eff_loss})
 
         self._layout = WindLayout(self.site.polygon, system_model, layout_mode, layout_params)
 
@@ -242,7 +248,7 @@ class WindPlant(PowerSource):
         if self.config.model_name=="pysam":
             self.initialize_pysam_wind_turbine()
     
-    def initalize_pysam_turbine_from_turbine_library(self, turbine_name):
+    def initialize_pysam_turbine_from_turbine_library(self, turbine_name):
         """Initialize PySAM wind turbine from a turbine available in the turbine-models library.
 
         Args:
@@ -293,7 +299,7 @@ class WindPlant(PowerSource):
 
         
         if self.config.turbine_name is not None:
-            self.initalize_pysam_turbine_from_turbine_library(self.config.turbine_name)
+            self.initialize_pysam_turbine_from_turbine_library(self.config.turbine_name)
         else:
             if self.config.rotor_diameter is not None:
                 self.rotor_diameter = self.config.rotor_diameter # this will update the layout

@@ -48,7 +48,7 @@ class PVConfig(BaseClass):
     system_capacity_kw: float = field(validator=gt_zero)
     use_pvwatts: bool = field(default=True)
     dc_ac_ratio: float = field(default = 1.3, validator=range_val(1.0, 1.5))
-    inv_eff: float = field(default = 96., validator=range_val(90., 100.))
+    inv_eff: float = field(default = 96., validator=range_val(80., 100.))
     losses: float = field(default = 14.08, validator=range_val(0., 50.))
     layout_params: Optional[Union[dict, PVGridParameters]] = field(default=None)
     layout_model: Optional[Union[dict, PVLayout]] = field(default=None)
